@@ -274,14 +274,11 @@ export class Batalha extends Phaser.Scene {
     this.add.text(W / 2, H / 2 + 10, `${f.motivo} · Mortes: ${this.e.mortes[this.lado]} x ${this.e.mortes[this.lado === 0 ? 1 : 0]}`, { fontFamily: FONTE, fontSize: "22px", color: "#e8dcc8" }).setOrigin(.5).setDepth(2001);
     const b = this.add.rectangle(W / 2, H / 2 + 100, 280, 70, 0x2f5fa8).setStrokeStyle(4, 0xffd97a).setDepth(2001).setInteractive({ useHandCursor: true });
     this.add.text(W / 2, H / 2 + 100, "Jogar de novo", { fontFamily: FONTE, fontSize: "26px", fontStyle: "bold", color: "#fff" }).setOrigin(.5).setDepth(2002);
+
     b.on("pointerdown", () => {
       console.log("Botão 'Jogar de novo' clicado - reiniciando jogo...");
       this.textos = {};
-      this.scene.start("Menu").then(() => {
-        console.log("Cena Menu carregada com sucesso");
-      }).catch(err => {
-        console.error("Erro ao carregar cena Menu:", err);
-      });
+      this.scene.start("Menu");
     });
   }
 }
