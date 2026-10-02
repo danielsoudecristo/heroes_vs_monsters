@@ -44,6 +44,8 @@ const FUNDO_MENU = {
 function carregarImagem(img, nomes) {
   const lista = [];
   for (const n of nomes) for (const ext of ["png", "jpg", "webp"]) lista.push(n + "." + ext);
+  // se só existir a versão larga (2560 x 1080), usa ela: o meio dela é a imagem normal (o "cover" corta os lados)
+  for (const n of nomes) for (const ext of ["jpg", "png", "webp"]) lista.push(n + "_largo." + ext);
   let i = 0;
   img.onerror = () => { if (++i < lista.length) img.src = lista[i]; };
   img.src = lista[0];

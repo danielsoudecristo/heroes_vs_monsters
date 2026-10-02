@@ -2671,6 +2671,8 @@ let imgFundo = IMGS_FUNDO.heroes_noite, imgFundoInimigo = IMGS_FUNDO.monsters_no
 for (const qual in FUNDOS) {
   const tentativas = [];                                     // cada nome com .png, .jpg e .webp
   for (const nome of FUNDOS[qual]) for (const ext of ["png", "jpg", "webp"]) tentativas.push(nome + "." + ext);
+  // se só existir a versão larga (2560 x 1080), usa o meio dela (desenharFundoImagem corta os lados)
+  for (const ext of ["jpg", "png", "webp"]) tentativas.push(FUNDOS[qual][0] + "_largo." + ext);
   (function carregarFundo(lista) {
     const im = IMGS_FUNDO[qual];
     if (!lista.length) {                                     // nada encontrado: avisa (o jogo usa o gramado de reserva)
@@ -2692,6 +2694,11 @@ function definirNoite(noite) {
   imgFundoInimigo = IMGS_FUNDO[(modoM ? "heroes_" : "monsters_") + dn];    // a do outro lado (direita, virada)
   if (imgFundo.complete && imgFundo.naturalWidth) desenharFundoImagem();
 }
+// imagem mais larga que 16:9 (a versão "_largo"): desenha só o meio 16:9, que é a imagem normal
+function desenharMeio(g, im) {
+  const w = im.naturalWidth, h = im.naturalHeight, sw = Math.min(w, h * W / H), sx = (w - sw) / 2;
+  g.drawImage(im, sx, 0, sw, h, 0, 0, W, H);
+}
 function desenharFundoImagem() {
   fundoComImagem = true; fundoDesenhado = true;
   const g = fundo.getContext("2d");
@@ -2700,11 +2707,11 @@ function desenharFundoImagem() {
   g.clearRect(0, 0, 2 * W, H);
   g.fillStyle = "#0b0912"; g.fillRect(0, 0, 2 * W, H);
   // a sua arena inteira na esquerda
-  g.drawImage(imgFundo, 0, 0, W, H);
+  desenharMeio(g, imgFundo);
   atualizarMolduraJogo();
   // a arena do outro lado inteira, virada (castelo dele na ponta direita): você vê a dela igual ele vê a sua
   const temInimigo = imgFundoInimigo.complete && imgFundoInimigo.naturalWidth;
-  if (temInimigo) { g.save(); g.translate(2 * W, 0); g.scale(-1, 1); g.drawImage(imgFundoInimigo, 0, 0, W, H); g.restore(); }
+  if (temInimigo) { g.save(); g.translate(2 * W, 0); g.scale(-1, 1); desenharMeio(g, imgFundoInimigo); g.restore(); }
   // sombra suave no alto
   const topo = g.createLinearGradient(0, 0, 0, 170);
   topo.addColorStop(0, "rgba(12,8,20,.45)"); topo.addColorStop(1, "rgba(12,8,20,0)");
