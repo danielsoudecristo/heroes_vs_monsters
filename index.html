@@ -81,7 +81,12 @@ html.tela-jogo body{background:transparent}
 html.tela-jogo .palco{border:0; border-radius:0; box-shadow:none; background:#07060b;
   width:min(100vw, calc(100vh * 16 / 9)); height:min(100vh, calc(100vw * 9 / 16))}
 html.tela-jogo .palco canvas{width:100%; height:100%; display:block}
-html.tela-jogo .fim{z-index:7; background:rgba(12,8,20,.72)}   /* a tela do fim fica por cima de tudo, mais escura */
+html.tela-jogo .fim{position:fixed; inset:0; z-index:7; background:rgba(12,8,20,.72)}
+#claraoJogo{position:fixed; inset:0; z-index:6; pointer-events:none; opacity:0}
+/* TREMOR_TELA_TODA: o jogo e as laterais tremem juntos (a lateral é um pouco maior para não aparecer borda) */
+html.tela-jogo .wrap, html.tela-jogo #fundoBorrado{translate:var(--tx, 0px) var(--ty, 0px)}
+html.tela-jogo #fundoBorrado.larga{inset:-14px}
+html.jogo-pausado #claraoJogo{opacity:1 !important; background:rgba(27,21,34,.45) !important}   /* a tela do fim fica por cima de tudo, mais escura */
 html.tela-jogo .palco:fullscreen{width:100vw; height:100vh}
 html.tela-jogo .palco:fullscreen canvas{width:min(100vw, calc(100vh * 16 / 9)); height:auto}
 /* PREENCHER_TELA: o jogo ocupa a largura toda; o que sobra em cima (céu) fica fora da tela */
@@ -231,8 +236,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 .lado img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
 .lado.heroes{clip-path:polygon(0 0,54.6% 0,45.2% 100%,0 100%); transform-origin:25% 60%}
 .lado.monsters{clip-path:polygon(54.6% 0,100% 0,100% 100%,45.2% 100%); transform-origin:75% 60%}
-.tela-lado[data-foco="heroes"] .lado.heroes, .tela-lado[data-foco="monsters"] .lado.monsters{filter:brightness(1.12) saturate(1.2)}
-.tela-lado[data-foco="heroes"] .lado.monsters, .tela-lado[data-foco="monsters"] .lado.heroes{filter:brightness(.38) saturate(.35)}
+/* (sem escurecer um dos lados: a imagem fica igual às laterais; o destaque fica nos botões) */
 .tela-lado::after{content:""; position:absolute; left:0; right:0; bottom:0; height:300px; z-index:2; pointer-events:none;
   background:linear-gradient(180deg,transparent,rgba(4,4,10,.55) 45%,rgba(4,4,10,.85))}
 .raio{position:absolute; inset:0; width:100%; height:100%; pointer-events:none; mix-blend-mode:screen}
@@ -255,10 +259,10 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 .placa.heroes{transform-origin:0 100%} .placa.monsters{transform-origin:100% 100%}
 /* depois de escolher: o lado escolhido avança e o outro sai */
 .tela-lado.escolheu .lado{transition:filter .5s, transform 1.1s cubic-bezier(.3,.7,.2,1)}
-.tela-lado.escolheu[data-foco="heroes"] .lado.heroes{transform:scale(1.12)}
-.tela-lado.escolheu[data-foco="heroes"] .lado.monsters{transform:translateX(60%); filter:brightness(.1)}
-.tela-lado.escolheu[data-foco="monsters"] .lado.monsters{transform:scale(1.12)}
-.tela-lado.escolheu[data-foco="monsters"] .lado.heroes{transform:translateX(-60%); filter:brightness(.1)}
+
+
+
+
 .tela-lado.escolheu .placa, .tela-lado.escolheu .lado-topo{opacity:0; transition:opacity .35s}
 .clarao{position:absolute; inset:0; z-index:8; background:#fff; opacity:0; pointer-events:none}
 .clarao.vai{animation:clarao .7s ease-out}
@@ -636,6 +640,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 <!-- ================= fim do INTRO ================= -->
 
 <div id="fundoBorrado" class="moldura"></div>
+<div id="claraoJogo"></div>
 <div class="wrap">
   <div class="topo">
     <div>

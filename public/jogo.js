@@ -12,7 +12,7 @@ G.bottom = G.top + G.ch * G.rows;   // 650
    No jogo, a arena do inimigo fica "longe" (vazio) para que ninguém ataque de uma arena para a outra. */
 const CAMPO = { vazio: 1200 };
 const MW = W * 2 + CAMPO.vazio;          // a arena do inimigo começa em W + vazio
-const PORTAO_X = W - 48;                  // portão da arena da esquerda (no jogo); o da outra fica em MW - PORTAO_X
+const PORTAO_X = W - 105;                 // portão da arena da esquerda (no jogo); o da outra fica em MW - PORTAO_X
 const PORTAO_INIMIGO = MW - G.left;       // portão do castelo do outro lado
 const NUCLEO = { x: 150, y: 405 };   // portão do castelo: é o que os monstros atacam (a vida da barra de cima é a do castelo)
 const LINHAS = "ABCDE";
@@ -4724,13 +4724,17 @@ function desenharEspiando() {
     ctx.fillStyle = "rgba(20,14,28,.88)"; rr((W - tw) / 2, 60 + cortTopo, tw, 40, 20); ctx.fill();
     ctx.fillStyle = "#ffe7a6"; ctx.fillText(txt, W / 2, 81 + cortTopo); ctx.restore();
   }
-  if (transVisao.t < 1) {
-    const a = 1 - Math.abs(transVisao.t - .5) * 2;          // sobe até o meio e desce
-    const cor = CORES_PORTAO[transVisao.paraEspiar !== modoM ? "monsters" : "heroes"];
-    const g = ctx.createRadialGradient(W / 2, H / 2, 20, W / 2, H / 2, W * .75);
-    g.addColorStop(0, `rgba(255,255,255,${a * .95})`); g.addColorStop(.35, cor.halo.replace(/[\d.]+\)$/, a + ")")); g.addColorStop(1, `rgba(8,6,16,${a})`);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // CLARAO_TELA_TODA: o clarão de trocar de arena e o "pausado" cobrem a tela inteira (com as laterais)
+  const cl = document.getElementById("claraoJogo");
+  if (cl) {
+    const a = transVisao.t < 1 ? 1 - Math.abs(transVisao.t - .5) * 2 : 0;
+    if (a > 0) {
+      const cor = CORES_PORTAO[transVisao.paraEspiar !== modoM ? "monsters" : "heroes"];
+      cl.style.background = `radial-gradient(ellipse at 50% 50%, rgba(255,255,255,.95), ${cor.halo.replace(/[\d.]+\)$/, "1)")} 35%, rgba(8,6,16,1) 100%)`;
+    }
+    cl.style.opacity = a;
   }
+  document.documentElement.classList.toggle("jogo-pausado", !!(pausado && !fim && INTRO.jogando));
   if (!espiando) return;
   const txt = "👁 Espiando a arena inimiga · clique na barra do seu castelo (ou Esc) para voltar";
   ctx.save(); ctx.font = "800 16px Grandstander, 'Trebuchet MS', sans-serif";
@@ -4738,10 +4742,6 @@ function desenharEspiando() {
   ctx.fillStyle = "rgba(20,14,28,.86)"; rr(x, y, tw, 34, 17); ctx.fill();
   ctx.strokeStyle = "#b07cff"; ctx.lineWidth = 2; ctx.stroke();
   ctx.fillStyle = "#f3e8ff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, W / 2, y + 18);
-  // bordas roxas: lembra que é outra "dimensão"
-  const v = ctx.createRadialGradient(W / 2, H / 2, H * .45, W / 2, H / 2, W * .72);
-  v.addColorStop(0, "rgba(90,40,140,0)"); v.addColorStop(1, "rgba(90,40,140,.35)");
-  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
   ctx.restore();
 }
 
@@ -4877,7 +4877,13 @@ function desenhar() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
 
-  if (tremor > 0) ctx.translate((Math.random() - .5) * tremor * 16, (Math.random() - .5) * tremor * 16);
+  // TREMOR_TELA_TODA: treme a tela inteira (o jogo junto com as laterais), nunca só o 16:9. No fim da partida não treme.
+  const raiz = document.documentElement.style;
+  if (tremor > 0 && !fim) {
+    const px = cv.getBoundingClientRect().width / W;          // em pixels da tela
+    raiz.setProperty("--tx", ((Math.random() - .5) * tremor * 16 * px).toFixed(1) + "px");
+    raiz.setProperty("--ty", ((Math.random() - .5) * tremor * 16 * px).toFixed(1) + "px");
+  } else if (raiz.getPropertyValue("--tx") !== "0px") { raiz.setProperty("--tx", "0px"); raiz.setProperty("--ty", "0px"); }
   atualizarCamera();
   if (cam.z > 1.001) { ctx.translate(W / 2, H / 2); ctx.scale(cam.z, cam.z); ctx.translate(-cam.cx, -cam.cy); }   // zoom (a barra de cards não entra no zoom)
   ctx.translate(-camX, 0);                             // DUAS_ARENAS: a sua (camX = 0) ou a do inimigo (espiando)
@@ -4973,8 +4979,7 @@ function desenhar() {
   desenharCursorPa();
   desenharDica();
 
-  if (pausado && !fim) {
-    ctx.fillStyle = "rgba(27,21,34,.45)"; ctx.fillRect(0, 0, W, H);
+  if (pausado && !fim) {                                            // (o escuro do pausado é o #claraoJogo, na tela toda)
     ctx.font = "800 54px Grandstander, 'Trebuchet MS', sans-serif"; ctx.fillStyle = "#fff4d6";
     ctx.textBaseline = "middle"; ctx.fillText("Pausado", W / 2, H / 2); ctx.textBaseline = "alphabetic";
   }
