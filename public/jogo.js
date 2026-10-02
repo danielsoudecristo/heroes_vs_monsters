@@ -2693,6 +2693,8 @@ function desenharFundoImagem() {
   g.fillStyle = "#0b0912"; g.fillRect(0, 0, 2 * W, H);
   // a sua arena inteira na esquerda
   g.drawImage(imgFundo, 0, 0, W, H);
+  const borrado = document.getElementById("fundoBorrado");
+  if (borrado && imgFundo.src) borrado.style.backgroundImage = `url("${imgFundo.src}")`;
   // a arena do outro lado inteira, virada (castelo dele na ponta direita): você vê a dela igual ele vê a sua
   const temInimigo = imgFundoInimigo.complete && imgFundoInimigo.naturalWidth;
   if (temInimigo) { g.save(); g.translate(2 * W, 0); g.scale(-1, 1); g.drawImage(imgFundoInimigo, 0, 0, W, H); g.restore(); }
@@ -2869,7 +2871,7 @@ function desenharFogo(lista = TOCHAS) {
 const BARRAS = { meu: null, inimigo: null };                  // onde ficam as barras (para o clique de espiar)
 function naBarra(x, y, r) { return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
 function desenharBarraCastelo() {
-  const cx = (G.left + G.right) / 2, w = 640, h = 44, x = cx - w / 2, y = H - h - 12;
+  const cx = (G.left + G.right) / 2, w = 640, h = 44, x = cx - w / 2, y = H - cortBase - h - 12;
   BARRAS.meu = { x, y, w, h };
   const d = nucleoDor, tre = d > 0 && !reduzMov ? Math.sin(tempo * 60) * 2 * d : 0;
   ctx.save(); ctx.translate(tre, 0);
@@ -4072,11 +4074,11 @@ function desenharNivelCarta(carta, i, x, y, w) {
    Clique no botão de novo (ou na tecla Q) para guardar as cartas. */
 const MAO = { escala: 1.65, espaco: 10, xInicio: 128, margemBaixo: 10, leque: .05, atraso: .045, dur: .42 };
 const mao = { aberta: false, t: 0, sobre: -1 };
-function retBotaoMao() { return { x: 14, y: H - 108, w: 104, h: 96 }; }
-function retBotaoPa() { return { x: 30, y: H - 108 - 82, w: 72, h: 74 }; }   // pá (tirar guerreiro), em cima do botão de energia
+function retBotaoMao() { return { x: 14, y: H - cortBase - 108, w: 104, h: 96 }; }
+function retBotaoPa() { return { x: 30, y: H - cortBase - 108 - 82, w: 72, h: 74 }; }   // pá (tirar guerreiro), em cima do botão de energia
 function retCartaMao(i) {
   const w = CARTA.w * MAO.escala, h = CARTA.h * MAO.escala;
-  return { x: MAO.xInicio + i * (w + MAO.espaco), y: H - MAO.margemBaixo - h, w, h };
+  return { x: MAO.xInicio + i * (w + MAO.espaco), y: H - cortBase - MAO.margemBaixo - h, w, h };
 }
 function nCartasMao() { return modoM ? MONSTROS_CARTAS.length : cartas.length; }   // Monsters: cards dos esqueletos
 function alternarMao() { mao.aberta = !mao.aberta; }
@@ -4563,6 +4565,7 @@ function desenharCursorPa() {
 function desenharOrbes() {
   for (const o of orbes) {
     if (o.lado && o.lado !== ladoQueJoga() && o.estado === "coletando") continue;   // a energia do outro não voa para o seu botão
+    if (o.pegaLocal) continue;                                                      // ONLINE: você já pegou (o voo já apareceu)
     const p0 = posOrbe(o), p = p0.tela ? p0 : { ...p0, ...paraTela(p0.x, p0.y) };
     const acabando = o.estado === "parado" && o.vida > ENERGIA_CEU.duracao - 2;
     if (acabando && Math.sin(o.vida * 22) < 0) continue;   // pisca antes de sumir
@@ -4706,8 +4709,8 @@ function desenharEspiando() {
   if (esperandoAdversario()) {                                 // ONLINE: a internet do outro atrasou
     ctx.save(); ctx.font = "800 18px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const txt = `Esperando ${rede.nomeOutro}... (internet lenta)`, tw = ctx.measureText(txt).width + 40;
-    ctx.fillStyle = "rgba(20,14,28,.88)"; rr((W - tw) / 2, 60, tw, 40, 20); ctx.fill();
-    ctx.fillStyle = "#ffe7a6"; ctx.fillText(txt, W / 2, 81); ctx.restore();
+    ctx.fillStyle = "rgba(20,14,28,.88)"; rr((W - tw) / 2, 60 + cortTopo, tw, 40, 20); ctx.fill();
+    ctx.fillStyle = "#ffe7a6"; ctx.fillText(txt, W / 2, 81 + cortTopo); ctx.restore();
   }
   if (transVisao.t < 1) {
     const a = 1 - Math.abs(transVisao.t - .5) * 2;          // sobe até o meio e desce
@@ -4719,7 +4722,7 @@ function desenharEspiando() {
   if (!espiando) return;
   const txt = "👁 Espiando a arena inimiga · clique na barra do seu castelo (ou Esc) para voltar";
   ctx.save(); ctx.font = "800 16px Grandstander, 'Trebuchet MS', sans-serif";
-  const tw = ctx.measureText(txt).width + 36, x = (W - tw) / 2, y = 14;
+  const tw = ctx.measureText(txt).width + 36, x = (W - tw) / 2, y = 14 + cortTopo;
   ctx.fillStyle = "rgba(20,14,28,.86)"; rr(x, y, tw, 34, 17); ctx.fill();
   ctx.strokeStyle = "#b07cff"; ctx.lineWidth = 2; ctx.stroke();
   ctx.fillStyle = "#f3e8ff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, W / 2, y + 18);
@@ -4953,6 +4956,7 @@ function desenhar() {
   desenharDicaEvoluir();
   desenharEspiando();
   desenharOrbes();
+  desenharRespostaNaHora(1 / 60);
   desenharCasaMouse();
   desenharCursorPa();
   desenharDica();
@@ -5167,6 +5171,7 @@ cv.addEventListener("click", e => {
   for (let i = orbes.length - 1; i >= 0; i--) {
     const p = posOrbe(orbes[i]);
     if (orbes[i].lado && orbes[i].lado !== ladoQueJoga()) continue;   // PvP: só dá para pegar a energia da sua arena
+    if (orbes[i].pegaLocal) continue;                                 // ONLINE: já pegou (está a caminho)
     if (orbes[i].estado !== "coletando" && Math.hypot(p.x - mw.x, p.y - mw.y) < 34 / Math.max(1, cam.z * .8)) { if (!pausado && !fim) agendar({ tipo: "orbe", id: orbes[i].id }); return; }
   }
   // 0) botão de energia / cartas grandes embaixo
@@ -5256,10 +5261,27 @@ function alternarTelaCheia() {
 }
 cv.addEventListener("contextmenu", e => e.preventDefault());   // botão direito não faz nada (tela cheia só na tecla F)
 // Ajusta a resolução ao tamanho real na tela, para não ficar borrado quando o jogo cresce
+/* PREENCHER_TELA: em telas mais compridas que o jogo (celular 20:9), o jogo ocupa a largura toda e corta
+   um pouco do céu em cima (e quase nada embaixo), como o Plants vs Zombies. O HUD sobe junto para não ser cortado. */
+const PREENCHER = { ligado: true, parteDeBaixo: 0.2 };       // parteDeBaixo: quanto do corte vai para baixo (o resto sai do céu)
+var cortTopo = 0, cortBase = 0;
+function layoutPreencher() {
+  const telaJogo = document.documentElement.classList.contains("tela-jogo");
+  const vw = innerWidth, vh = innerHeight, larga = vw / vh > W / H + .01;
+  if (!PREENCHER.ligado || !telaJogo || !larga || document.fullscreenElement) {
+    document.documentElement.classList.remove("preencher"); cv.style.top = ""; cortTopo = cortBase = 0; return;
+  }
+  document.documentElement.classList.add("preencher");
+  const altCss = vw * H / W, sobra = (altCss - vh) * H / altCss;   // quanto do jogo (em pixels do jogo) não cabe
+  cortBase = Math.min(30, sobra * PREENCHER.parteDeBaixo); cortTopo = sobra - cortBase;
+  cv.style.top = (-cortTopo * altCss / H) + "px";
+}
 function ajustarResolucao() {
+  layoutPreencher();
   const b = cv.getBoundingClientRect();
   if (!b.width) return;
-  const k = Math.min(3, Math.max(1, b.width * (window.devicePixelRatio || 1) / W));
+  const celular = matchMedia("(pointer: coarse)").matches;      // CELULAR: até 1,5x (bem mais leve e ainda nítido)
+  const k = Math.min(celular ? 1.5 : 3, Math.max(1, b.width * (window.devicePixelRatio || 1) / W));
   if (Math.abs(k - dpr) > .01) { dpr = k; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
 }
 addEventListener("resize", () => requestAnimationFrame(ajustarResolucao));
@@ -5408,7 +5430,50 @@ const PVP = {
 };
 var pvp = null, energiaM = 0;
 function simM() { return pvp ? false : modoM; }        // como a partida funciona por dentro (no PvP: sempre igual)
-function energiaVista() { return Math.floor(pvp && modoM ? energiaM : energia); }   // a energia que aparece para você
+function energiaVista() {                              // a energia que aparece para você
+  let e = pvp && modoM ? energiaM : energia;
+  if (rede) e += energiaACaminho();                       // ONLINE: já mostra o que você pegou/gastou e ainda vai acontecer
+  return Math.max(0, Math.floor(e));
+}
+// RESPOSTA_NA_HORA (online): o que você fez e ainda está esperando o passo dela
+function minhasPendentes() { return rede ? filaAcoes.filter(a => a.lado === rede.ladoLocal && a.passo > passoN) : []; }
+function energiaACaminho() {
+  let d = 0;
+  for (const a of minhasPendentes()) {
+    if (a.tipo === "orbe") { const o = orbes.find(o => o.id === a.id); if (o && o.estado !== "coletando") d += o.valor; }
+    else if (a.tipo === "colocar") { const c = cartas[a.carta]; if (c && GUERREIROS[c.id]) d -= GUERREIROS[c.id].custo; }
+    else if (a.tipo === "monstroM") { const id = MONSTROS_CARTAS[a.idx]; if (id) d -= custoMonstro(id); }
+  }
+  return d;
+}
+var voosLocais = [];                                       // energia voando na sua tela antes da ação acontecer (só enfeite)
+function desenharRespostaNaHora(dt) {
+  if (!rede) { voosLocais.length = 0; return; }
+  // energia que você clicou: voa para o botão na hora
+  for (const v of voosLocais) v.t += dt;
+  voosLocais = voosLocais.filter(v => v.t < .45);
+  for (const v of voosLocais) {
+    const k = v.t / .45, e = 1 - Math.pow(1 - k, 3);
+    const x = v.sx + (POS_ENERGIA.x - v.sx) * e, y = v.sy + (POS_ENERGIA.y - v.sy) * e - Math.sin(k * Math.PI) * 60;
+    ctx.save(); ctx.globalAlpha = 1 - k * .3; ctx.globalCompositeOperation = "lighter";
+    const g = ctx.createRadialGradient(x, y, 1, x, y, 22); g.addColorStop(0, "#fffbe0"); g.addColorStop(.4, "#ffd34d"); g.addColorStop(1, "rgba(255,180,40,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 22, 0, 7); ctx.fill(); ctx.restore();
+  }
+  // tropa que você colocou: círculo de invocação na casa até ela surgir
+  const cor = rede.ladoLocal === "heroes" ? "255,215,90" : "140,240,90";
+  for (const a of minhasPendentes()) {
+    if (a.tipo !== "colocar" && a.tipo !== "monstroM") continue;
+    const p = paraTela(celX(a.c), chaoY(a.r) - 6), fal = Math.max(0, (a.passo - passoN) / (ONLINE.turno * ONLINE.atraso));
+    const r = 34 * (1 - fal * .35), giro = tempo * 4;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, .42);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = `rgba(${cor},.9)`; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, r, giro, giro + Math.PI * 1.5); ctx.stroke();
+    ctx.strokeStyle = `rgba(${cor},.5)`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r * .62, -giro, -giro + Math.PI * 1.3); ctx.stroke();
+    const g = ctx.createRadialGradient(0, 0, 2, 0, 0, r); g.addColorStop(0, `rgba(${cor},.55)`); g.addColorStop(1, `rgba(${cor},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+}
 function comecarPvp(lado) {
   pvp = { ladoLocal: lado, tempo: PVP.duracao, preparo: PVP.preparo, prorrogacao: false, mortosH: 0, botT: 4, solT: 2, vencedor: undefined };
   ondas = false;
@@ -5510,7 +5575,7 @@ function esperandoAdversario() { return rede && rede.esperandoDesde && performan
    - Só se simula um turno quando as ações do adversário para ele já chegaram (se atrasar, o jogo espera).
    - No fim, os dois mandam o resultado e a "foto" da partida para o servidor: troféus só valem se baterem.
    ===================================================================== */
-const ONLINE = { turno: 15, atraso: 4, desisteEm: 20, pedeDeNovoEm: 0.5, repete: 2 };   // repete = cada mensagem leva também os 2 turnos anteriores (se uma se perder, a próxima cobre)
+const ONLINE = { turno: 10, atraso: 3, desisteEm: 20, pedeDeNovoEm: 0.5, repete: 2 };   // repete = cada mensagem leva também os 2 turnos anteriores (se uma se perder, a próxima cobre)
 var rede = null;
 function onlineAtivo() { return !!rede; }
 function turnoDe(passo) { return Math.floor(passo / ONLINE.turno); }
@@ -5631,6 +5696,13 @@ function agendar(acao) {
     acao.lado = rede.ladoLocal;
     acao.passo = passoN + ONLINE.turno * ONLINE.atraso;
     rede.minhas.push(acao);
+    if (acao.tipo === "orbe") {                               // RESPOSTA_NA_HORA: a energia já voa na sua tela
+      const o = orbes.find(o => o.id === acao.id);
+      if (o && !o.pegaLocal && o.estado !== "coletando") {
+        const p0 = posOrbe(o), p = p0.tela ? p0 : paraTela(p0.x, p0.y);
+        o.pegaLocal = true; voosLocais.push({ sx: p.x, sy: p.y, t: 0 });
+      }
+    }
   } else acao.passo = passoN + ATRASO_ACAO;
   filaAcoes.push(acao);
   return true;
@@ -6052,7 +6124,8 @@ function preencherAjustes() {
   });
 }
 montarPainelAjustes();
+// os ajustes ao vivo só ficam conferindo o arquivo no seu PC (npm run dev); no site e no app, lê uma vez só
 setTimeout(lerAjustes, 300);
-setInterval(() => { if (!document.hidden) lerAjustes(); }, AJUSTES.conferirCada);
+if (location.port === "5173") setInterval(() => { if (!document.hidden) lerAjustes(); }, AJUSTES.conferirCada);
 
 })();

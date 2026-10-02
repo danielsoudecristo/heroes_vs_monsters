@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Heroes vs Monsters</string>
+    <string name="title_activity_main">Heroes vs Monsters</string>
+    <string name="package_name">com.danielsoucristo.heroesvsmonsters</string>
+    <string name="custom_url_scheme">com.danielsoucristo.heroesvsmonsters</string>
+</resources>

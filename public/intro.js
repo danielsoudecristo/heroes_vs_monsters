@@ -172,6 +172,9 @@ $("btGoogle").addEventListener("click", async () => {
   try { await window.CONTA.entrarGoogle(); }                       // a página vai para o Google e volta sozinha
   catch (e) { $("btGoogle").disabled = false; $("loginMsg").textContent = "Não deu para entrar: " + (e.message || e); }
 });
+window.addEventListener("login-fechado", () => {                  // APP: fechou a janela do Google sem entrar
+  $("btGoogle").disabled = false; $("loginMsg").textContent = "Login cancelado. Toque em Entrar com Google para tentar de novo.";
+});
 $("btConvidado").addEventListener("click", () => {
   somClique(true);
   try { sessionStorage.setItem("hvm_convidado", "1"); } catch {}

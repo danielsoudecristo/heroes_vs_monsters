@@ -61,11 +61,22 @@ canvas{display:block; width:100%; height:auto; aspect-ratio:1280/720; cursor:cro
 html.tela-jogo, html.tela-jogo body{margin:0; height:100%; overflow:hidden; background:#07060b}
 html.tela-jogo .wrap{max-width:none; padding:0; height:100vh; display:grid; place-items:center}
 html.tela-jogo .topo, html.tela-jogo .painel{display:none}
+/* LATERAIS: em tela mais comprida que o jogo (celular), o espaço dos lados mostra o cenário desfocado em vez de preto */
+#fundoBorrado{display:none}
+html.tela-jogo #fundoBorrado{display:block; position:fixed; inset:-60px; z-index:-1; background:#07060b center/cover no-repeat; filter:blur(26px) brightness(.5) saturate(1.2)}
+html.tela-jogo body{background:transparent}
+.intro::before{content:""; position:absolute; inset:-60px; background:url("Menu/carregando.png") center/cover no-repeat, url("Menu/carregando.jpg") center/cover no-repeat;
+  filter:blur(26px) brightness(.45); pointer-events:none}
 html.tela-jogo .palco{border:0; border-radius:0; box-shadow:none; background:#07060b;
   width:min(100vw, calc(100vh * 16 / 9)); height:min(100vh, calc(100vw * 9 / 16))}
 html.tela-jogo .palco canvas{width:100%; height:100%; display:block}
 html.tela-jogo .palco:fullscreen{width:100vw; height:100vh}
 html.tela-jogo .palco:fullscreen canvas{width:min(100vw, calc(100vh * 16 / 9)); height:auto}
+/* PREENCHER_TELA: o jogo ocupa a largura toda; o que sobra em cima (céu) fica fora da tela */
+html.tela-jogo.preencher .palco{position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden}
+html.tela-jogo.preencher .palco canvas{position:absolute; left:0; width:100vw; height:calc(100vw * 9 / 16)}
+/* APP: sem os botões redondos (o botão "voltar" do Android abre o menu) */
+html.no-app .botoes-jogo{display:none}
 .botoes-jogo{position:absolute; top:10px; right:10px; z-index:6; display:flex; gap:8px}
 .botoes-jogo button{width:42px; height:42px; border-radius:50%; border:0; cursor:pointer; display:grid; place-items:center; font-size:20px; line-height:1;
   color:#2a1804; background:linear-gradient(180deg,#ffe58a,#d8921a); box-shadow:0 0 0 2px #1a1208, 0 4px 10px rgba(0,0,0,.45); opacity:.85; transition:opacity .15s, transform .15s}
@@ -461,6 +472,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 <body>
 <script>/* TELA_DO_JOGO: começa ocupando a janela toda; com ?dev=1 ou F2 aparecem os painéis de teste */
   if (!/[?&]dev=1/.test(location.search)) document.documentElement.classList.add("tela-jogo");   /* jogadores: só o jogo */
+  if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) document.documentElement.classList.add("no-app");
 </script>
 <!-- ================= INTRO (carregamento, escolha do lado e menu) =================
      Os textos e botões ficam aqui; as animações ficam em public/intro.js. -->
@@ -610,6 +622,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 </div>
 <!-- ================= fim do INTRO ================= -->
 
+<div id="fundoBorrado"></div>
 <div class="wrap">
   <div class="topo">
     <div>

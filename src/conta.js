@@ -5,11 +5,18 @@
    NUNCA coloque aqui a chave "secret" / "service_role".
    ===================================================================== */
 import { createClient } from "@supabase/supabase-js";
+import { App } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 
 const SUPABASE = {
   url: "https://wrhrtzesfhiwydtmbezq.supabase.co",
   chave: "sb_publishable_LzAJ7FOOCOBJWr8DwuyvVg_xsfKCDTP"
 };
+
+// APP_ANDROID: no app, o login abre no navegador e VOLTA para o app por este endereço
+const ESQUEMA_APP = "com.danielsoucristo.heroesvsmonsters";
+const PONTE_LOGIN = "https://heroes-vs-monsters.pages.dev/app-login.html";   // página do site que devolve o login para o app
+const noApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
 const sb = createClient(SUPABASE.url, SUPABASE.chave, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }   // a sessão fica salva: não precisa entrar toda vez
@@ -27,9 +34,18 @@ window.CONTA = {
   pronta: false,
   usuario: () => usuario,
   async entrarGoogle() {
+    if (noApp) {                                   // APP: abre o Google numa janela do navegador e volta para o app
+      const { data, error } = await sb.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: PONTE_LOGIN, skipBrowserRedirect: true }
+      });
+      if (error) throw error;
+      await Browser.open({ url: data.url });
+      return;
+    }
     const { error } = await sb.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: location.origin + location.pathname }   // volta para esta mesma página depois do Google
+      options: { redirectTo: location.origin + location.pathname }   // SITE: volta para esta mesma página depois do Google
     });
     if (error) throw error;
   },
@@ -110,3 +126,31 @@ sb.auth.getSession().then(({ data }) => {
     if ((novo && novo.id) !== (usuario && usuario.id)) { usuario = novo; avisar(); }
   });
 }).catch(e => { console.error("Supabase:", e); window.CONTA.pronta = true; avisar(); });
+
+// APP: quando o Google termina, o Android abre "com.danielsoucristo.heroesvsmonsters://login#access_token=..."
+// e o app pega a sessão daqui (sem ir para o site)
+if (noApp) App.addListener("appUrlOpen", async ({ url }) => {
+  if (!url || !url.startsWith(ESQUEMA_APP + "://")) return;
+  try {
+    const depois = url.includes("#") ? url.split("#")[1] : (url.split("?")[1] || "");
+    const q = new URLSearchParams(depois);
+    if (q.get("access_token") && q.get("refresh_token")) {
+      await sb.auth.setSession({ access_token: q.get("access_token"), refresh_token: q.get("refresh_token") });
+    } else if (q.get("code")) {
+      await sb.auth.exchangeCodeForSession(q.get("code"));
+    }
+  } catch (e) { console.error("Login no app:", e); }
+  try { await Browser.close(); } catch {}
+});
+
+// APP: o botão "voltar" do Android abre o menu do jogo (no menu, ele minimiza o app)
+if (noApp) App.addListener("backButton", () => {
+  const intro = document.getElementById("intro");
+  if (intro && !intro.hidden) App.minimizeApp();
+  else if (window.INTRO_ABRIR_MENU) window.INTRO_ABRIR_MENU();
+});
+
+// APP: se a pessoa fechar a janela do Google sem entrar, a tela de login volta a funcionar
+if (noApp) Browser.addListener("browserFinished", () => {
+  if (!usuario) window.dispatchEvent(new CustomEvent("login-fechado"));
+});
