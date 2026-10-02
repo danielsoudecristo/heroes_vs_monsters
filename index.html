@@ -33,6 +33,8 @@
   --accent:#b88ae6; --gold:#f2c14e; --ok:#6fcf83; --bad:#ff7a70;
 }
 *,*::before,*::after{box-sizing:inherit}
+*{-webkit-tap-highlight-color:transparent}            /* sem o clarão do toque no celular */
+canvas:focus, .palco:focus, .intro-palco:focus{outline:none}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{
   margin:0; background:var(--bg); color:var(--ink);
@@ -67,6 +69,11 @@ html.tela-jogo #fundoBorrado{display:block; position:fixed; inset:0; z-index:-1}
 /* MOLDURA: laterais com a continuação da imagem (ou a imagem desfocada, se ainda não existir a versão "_largo") */
 .moldura{background:#07060b center/cover no-repeat; filter:blur(26px) brightness(.5) saturate(1.2); transform-origin:center}
 #introMoldura{position:absolute; inset:0}
+#introMoldura::after{content:""; position:absolute; inset:0; pointer-events:none}
+#introMoldura[data-tela="carga"]::after{background:linear-gradient(180deg,rgba(5,4,12,.72) 0%,rgba(5,4,12,.1) 30%,rgba(5,4,12,0) 60%,rgba(5,4,12,.82) 100%)}
+#introMoldura[data-tela="login"]::after{background:rgba(8,6,16,.75)}
+#introMoldura[data-tela="lado"]::after{background:linear-gradient(180deg,transparent 58%,rgba(4,4,10,.55) 79%,rgba(4,4,10,.85))}
+#introMoldura[data-tela="menu"]::after{background:linear-gradient(180deg,rgba(6,7,14,.55),rgba(6,7,14,0) 32%,rgba(6,7,14,0) 80%,rgba(6,7,14,.6))}
 .moldura:not(.larga){inset:-60px !important}
 .moldura.larga{filter:none; background-position:center, center; background-repeat:no-repeat, no-repeat; background-color:#07060b}
 html.tela-jogo body{background:transparent}
@@ -192,7 +199,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 .l-battle b{display:block; width:10px; height:10px; transform:rotate(45deg); background:#fff; box-shadow:0 1px 3px #000}
 
 /* ---------- 1) Carregamento ---------- */
-.tela-carga .cobre{animation:aproxima 14s ease-out forwards}
+.tela-carga .cobre{}   /* (sem zoom: a imagem do meio fica igual às laterais) */
 @keyframes aproxima{from{transform:scale(1.0)}to{transform:scale(1.06)}}
 .tela-carga::after{content:""; position:absolute; inset:0; pointer-events:none;
   background:linear-gradient(180deg,rgba(5,4,12,.72) 0%,rgba(5,4,12,.1) 30%,rgba(5,4,12,0) 60%,rgba(5,4,12,.82) 100%)}
@@ -338,7 +345,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 }
 
 /* ---------- LOGIN (Entrar com Google / convidado) ---------- */
-.tela-login::after{content:""; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 60%,rgba(8,6,16,.55),rgba(8,6,16,.88)); pointer-events:none}
+.tela-login::after{content:""; position:absolute; inset:0; background:rgba(8,6,16,.75); pointer-events:none}
 .login-caixa{position:absolute; left:50%; top:262px; transform:translateX(-50%); z-index:2; width:470px; padding:26px 30px 22px; border-radius:16px; text-align:center;
   background:linear-gradient(180deg,rgba(38,44,70,.95),rgba(20,24,39,.95)); box-shadow:0 0 0 2px #0c0e17, 0 0 0 5px #8a6526, 0 0 0 7px #0c0e17, 0 24px 60px rgba(0,0,0,.7)}
 .login-caixa h2{margin:0 0 8px; font-weight:900; font-size:28px; letter-spacing:.06em; color:#ffe7a6; text-shadow:0 2px 0 #000}

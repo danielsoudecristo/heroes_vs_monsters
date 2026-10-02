@@ -43,9 +43,10 @@ const FUNDO_MENU = {
 };
 function carregarImagem(img, nomes) {
   const lista = [];
-  for (const n of nomes) for (const ext of ["png", "jpg", "webp"]) lista.push(n + "." + ext);
-  // se só existir a versão larga (2560 x 1080), usa ela: o meio dela é a imagem normal (o "cover" corta os lados)
+  // a versão larga (2560 x 1080) vem primeiro: o meio dela é a imagem normal (o "cover" corta os lados),
+  // assim o meio e as laterais saem do MESMO arquivo e não aparece divisão
   for (const n of nomes) for (const ext of ["jpg", "png", "webp"]) lista.push(n + "_largo." + ext);
+  for (const n of nomes) for (const ext of ["png", "jpg", "webp"]) lista.push(n + "." + ext);
   let i = 0;
   img.onerror = () => { if (++i < lista.length) img.src = lista[i]; };
   img.src = lista[0];
@@ -54,7 +55,7 @@ document.querySelectorAll("img[data-fotos]").forEach(img => carregarImagem(img, 
 /* ---------- MOLDURA (laterais): o jogo fica sempre em 16:9; o espaço que sobra dos lados (celular) mostra a
    CONTINUAÇÃO da imagem. Cada tela procura "<imagem>_largo" (2560 x 1080, .jpg/.png/.webp) na mesma pasta.
    Se não existir, mostra a própria imagem desfocada (como antes). ---------- */
-const MOLDURA = { escurecerLados: .35 };       // 0 = sem escurecer as laterais; .35 = levemente mais escuras
+const MOLDURA = { escurecerLados: 0 };         // 0 = laterais iguais ao meio (sem divisão); .35 = pontas mais escuras
 function achaImagem(nomes, ok, falhou) {
   const lista = []; for (const n of nomes) for (const e of ["jpg", "png", "webp"]) lista.push(n + "." + e);
   let i = 0; const im = new Image();
@@ -160,6 +161,7 @@ function molduraDaTela() {                                   // qual imagem vai 
   const base = telaAtual === "lado" ? "Menu/escolher_lado"
     : telaAtual === "menu" ? (ladoMenu === "monsters" ? "Fundo/arena_monsters_noite" : "Fundo/arena_guerreiro_noite")
     : "Menu/carregando";
+  $("introMoldura").dataset.tela = telaAtual;                 // as mesmas sombras da tela, nas laterais
   aplicarMoldura($("introMoldura"), base, false);
 }
 

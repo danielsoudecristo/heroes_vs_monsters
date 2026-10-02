@@ -2670,9 +2670,9 @@ for (const qual in FUNDOS) IMGS_FUNDO[qual] = new Image();
 let imgFundo = IMGS_FUNDO.heroes_noite, imgFundoInimigo = IMGS_FUNDO.monsters_noite, noiteAtual = true;
 for (const qual in FUNDOS) {
   const tentativas = [];                                     // cada nome com .png, .jpg e .webp
-  for (const nome of FUNDOS[qual]) for (const ext of ["png", "jpg", "webp"]) tentativas.push(nome + "." + ext);
-  // se só existir a versão larga (2560 x 1080), usa o meio dela (desenharFundoImagem corta os lados)
+  // a versão larga (2560 x 1080) vem primeiro: a arena e as laterais saem do MESMO arquivo (sem divisão)
   for (const ext of ["jpg", "png", "webp"]) tentativas.push(FUNDOS[qual][0] + "_largo." + ext);
+  for (const nome of FUNDOS[qual]) for (const ext of ["png", "jpg", "webp"]) tentativas.push(nome + "." + ext);
   (function carregarFundo(lista) {
     const im = IMGS_FUNDO[qual];
     if (!lista.length) {                                     // nada encontrado: avisa (o jogo usa o gramado de reserva)
@@ -2712,10 +2712,7 @@ function desenharFundoImagem() {
   // a arena do outro lado inteira, virada (castelo dele na ponta direita): você vê a dela igual ele vê a sua
   const temInimigo = imgFundoInimigo.complete && imgFundoInimigo.naturalWidth;
   if (temInimigo) { g.save(); g.translate(2 * W, 0); g.scale(-1, 1); desenharMeio(g, imgFundoInimigo); g.restore(); }
-  // sombra suave no alto
-  const topo = g.createLinearGradient(0, 0, 0, 170);
-  topo.addColorStop(0, "rgba(12,8,20,.45)"); topo.addColorStop(1, "rgba(12,8,20,0)");
-  g.fillStyle = topo; g.fillRect(0, 0, 2 * W, 170);
+  // (sem a sombra no alto: assim o céu fica igual ao das laterais, sem divisão)
   // casas da grade: xadrez bem leve na terra (a arena do outro lado tem a mesma grade, virada)
   if (GRADE_VISIVEL.xadrez) for (let r = 0; r < G.rows; r++) for (let c = 0; c < G.cols; c++) {
     g.fillStyle = (r + c) % 2 ? "rgba(255,236,190,.04)" : "rgba(40,20,10,.06)";   // bem leve, para não brigar com a imagem
