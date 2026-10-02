@@ -4532,7 +4532,8 @@ function desenharCasaMouseMundo() {
   const g = GUERREIROS[tipo];
   const semEnergia = !pendenteSel && !MODO_TESTE.energiaInfinita && energia < g.custo;
   const invalido = !!grade[r][c] || semEnergia;
-  if (grade[r][c]) {                               // guerreiro na casa: mostra que clicando ele evolui, e quanto custa
+  if (grade[r][c]) return;                         // EVOLUIR_NA_ARENA saiu: a evolução agora é pela tela Personagens (moedas)
+  if (false) {
     const p = grade[r][c];
     if (p.morte || (p.nivel || 1) >= NIVEIS.max) return;
     const nv = (p.nivel || 1) + 1, custo = custoEvoluirGuerreiro(p), pode = MODO_TESTE.energiaInfinita || energia >= custo;
@@ -5229,7 +5230,7 @@ cv.addEventListener("click", e => {
       } else {
         if (cliqueGuerreiro) clearTimeout(cliqueGuerreiro.timer);
         const alvo = { r, c };
-        alvo.timer = setTimeout(() => { cliqueGuerreiro = null; if (grade[r][c]) agendar({ tipo: "evoluir", r, c, origem: "clique" }); }, DUPLO_CLIQUE_MS);
+        alvo.timer = setTimeout(() => { cliqueGuerreiro = null; }, DUPLO_CLIQUE_MS);   // um clique não faz nada (dois cliques tiram o guerreiro)
         cliqueGuerreiro = alvo;
       }
       return;

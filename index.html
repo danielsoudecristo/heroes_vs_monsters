@@ -264,7 +264,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 
 
 .tela-lado.escolheu .placa, .tela-lado.escolheu .lado-topo{opacity:0; transition:opacity .35s}
-.clarao{position:absolute; inset:0; z-index:8; background:#fff; opacity:0; pointer-events:none}
+.clarao{position:absolute; inset:0; z-index:30; background:#fff; opacity:0; pointer-events:none}
 .clarao.vai{animation:clarao .7s ease-out}
 @keyframes clarao{0%{opacity:.95}100%{opacity:0}}
 
@@ -551,7 +551,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
       <nav class="botoes-menu" id="botoesMenu">
         <button class="bm principal" data-acao="continuar" hidden><span class="ico"><svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7z" fill="#2a1804"/></svg></span><span class="txt">Continuar</span></button>
         <button class="bm principal" data-acao="novo"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#2a1804" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 3.5H20.5V9.5L9 21 3 15z"/><path d="M5 13l6 6M3.5 20.5l2-2"/></svg></span><span class="txt">Novo jogo</span></button>
-        <button class="bm" data-acao="pvp"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#f6c343" stroke-width="2" stroke-linecap="round"><path d="M4 4l10 10M14 14l3 3M20 4L10 14M10 14l-3 3M5.5 16.5l2 2M18.5 16.5l-2 2"/></svg></span><span class="txt">Batalha PvP</span><span class="breve" style="background:#2f5a1e">vs bot</span></button>
+        <button class="bm" data-acao="pvp"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#f6c343" stroke-width="2" stroke-linecap="round"><path d="M4 4l10 10M14 14l3 3M20 4L10 14M10 14l-3 3M5.5 16.5l2 2M18.5 16.5l-2 2"/></svg></span><span class="txt">Batalha PvP</span></button>
         <button class="bm" data-acao="personagens"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#f6c343" stroke-width="2" stroke-linejoin="round"><path d="M5 20v-8a7 7 0 0114 0v8z"/><path d="M5 13h14M12 13v7M9 16.5h6"/></svg></span><span class="txt">Personagens</span></button>
         <button class="bm" data-acao="ranking"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#f6c343" stroke-width="2" stroke-linejoin="round"><path d="M3 20h18M5 20V11h4v9M10 20V6h4v14M15 20v-6h4v6"/></svg></span><span class="txt">Ranking e ligas</span></button>
         <button class="bm" data-acao="opcoes"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#f6c343" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="6.5"/></svg></span><span class="txt">Opções</span></button>
@@ -590,7 +590,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
           <h3 id="buscaTitulo">Procurando adversário...</h3>
           <div class="busca-roda"><span id="buscaTempo">15</span></div>
           <p id="buscaTxt">Você joga de Heroes. Se ninguém de Monsters aparecer, você joga contra o bot.</p>
-          <div class="acoes"><button class="jb" id="buscaCancelar">Cancelar</button><button class="jb ouro" id="buscaBot">Jogar contra o bot agora</button></div>
+          <div class="acoes"><button class="jb" id="buscaCancelar">Cancelar</button><button class="jb ouro" id="buscaBot">Jogar sem PvP agora</button></div>
         </div>
       </div>
       <div class="janela-fundo" id="janelaPersonagens">

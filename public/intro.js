@@ -288,7 +288,11 @@ for (const el of telas.lado.querySelectorAll(".lado")) {
   el.addEventListener("pointerenter", () => { if (!escolhendo) focoLado(el.dataset.lado); });
   el.addEventListener("click", () => escolherLado(el.dataset.lado));
 }
-function flash() { const c = $("clarao"); c.classList.remove("vai"); void c.offsetWidth; c.classList.add("vai"); }
+function flash() {                                              // clarão na TELA INTEIRA (com as laterais)
+  let c = $("claraoIntro");
+  if (!c) { c = document.createElement("div"); c.id = "claraoIntro"; c.className = "clarao"; intro.appendChild(c); }
+  c.classList.remove("vai"); void c.offsetWidth; c.classList.add("vai");
+}
 
 /* ================= 3) MENU ================= */
 let ladoMenu = "heroes";
@@ -926,7 +930,9 @@ let busca = null;
 async function procurarPartida() {
   const nomeLado = l => (l === "heroes" ? "Heroes" : "Monsters");
   $("buscaTitulo").textContent = "Procurando adversário...";
-  $("buscaTxt").textContent = `Você joga de ${nomeLado(ladoMenu)}. Se ninguém de ${nomeLado(ladoMenu === "heroes" ? "monsters" : "heroes")} aparecer, você joga contra o bot.`;
+  $("buscaTxt").textContent = `Você joga de ${nomeLado(ladoMenu)}. Procurando alguém de ${nomeLado(ladoMenu === "heroes" ? "monsters" : "heroes")}...`;
+  $("buscaBot").textContent = "Jogar sem PvP agora";
+  $("buscaCancelar").textContent = "Cancelar";
   abrirJanela("janelaBusca");
   const minha = busca = { inicio: performance.now(), ativa: true };
   const roda = document.querySelector(".busca-roda");
@@ -959,7 +965,16 @@ async function procurarPartida() {
       catch (e) { alert("Não deu para entrar na partida: " + (e.message || e)); window.JOGO.iniciarPvp(ladoMenu); }
       return;
     }
-    if ((performance.now() - minha.inicio) / 1000 >= BUSCA.espera) { jogarBot(); return; }
+    if ((performance.now() - minha.inicio) / 1000 >= BUSCA.espera) {    // ninguém apareceu: a pessoa escolhe
+      terminar(); try { await window.CONTA.rpc("sair_da_fila"); } catch {}
+      $("buscaTitulo").textContent = "Ninguém apareceu agora";
+      $("buscaTxt").textContent = "Tente procurar de novo daqui a pouco, ou jogue sem PvP enquanto isso.";
+      $("buscaTempo").textContent = "😕"; roda.style.setProperty("--p", "100%");
+      $("buscaCancelar").textContent = "Procurar de novo";
+      $("buscaCancelar").onclick = () => { somClique(true); procurarPartida(); };
+      $("buscaBot").textContent = "Jogar sem PvP";
+      return;
+    }
     await new Promise(ok => setTimeout(ok, BUSCA.cada));
   }
 }
