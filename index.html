@@ -460,7 +460,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 </head>
 <body>
 <script>/* TELA_DO_JOGO: começa ocupando a janela toda; com ?dev=1 ou F2 aparecem os painéis de teste */
-  try { if (!/[?&]dev=1/.test(location.search) && localStorage.getItem("hvm_dev") !== "1") document.documentElement.classList.add("tela-jogo"); } catch { document.documentElement.classList.add("tela-jogo"); }
+  if (!/[?&]dev=1/.test(location.search)) document.documentElement.classList.add("tela-jogo");   /* jogadores: só o jogo */
 </script>
 <!-- ================= INTRO (carregamento, escolha do lado e menu) =================
      Os textos e botões ficam aqui; as animações ficam em public/intro.js. -->

@@ -2701,16 +2701,23 @@ function desenharFundoImagem() {
   topo.addColorStop(0, "rgba(12,8,20,.45)"); topo.addColorStop(1, "rgba(12,8,20,0)");
   g.fillStyle = topo; g.fillRect(0, 0, 2 * W, 170);
   // casas da grade: xadrez bem leve na terra (a arena do outro lado tem a mesma grade, virada)
-  for (let r = 0; r < G.rows; r++) for (let c = 0; c < G.cols; c++) {
+  if (GRADE_VISIVEL.xadrez) for (let r = 0; r < G.rows; r++) for (let c = 0; c < G.cols; c++) {
     g.fillStyle = (r + c) % 2 ? "rgba(255,236,190,.04)" : "rgba(40,20,10,.06)";   // bem leve, para não brigar com a imagem
     g.fillRect(G.left + c * G.cw, G.top + r * G.ch, G.cw, G.ch);
     g.fillRect(2 * W - G.left - (c + 1) * G.cw, G.top + r * G.ch, G.cw, G.ch);
   }
-  g.strokeStyle = "rgba(60,30,10,.12)"; g.lineWidth = 1;
-  g.strokeRect(G.left + .5, G.top + .5, G.right - G.left - 1, G.bottom - G.top - 1);
+  if (GRADE_VISIVEL.xadrez) {
+    g.strokeStyle = "rgba(60,30,10,.12)"; g.lineWidth = 1;
+    g.strokeRect(G.left + .5, G.top + .5, G.right - G.left - 1, G.bottom - G.top - 1);
+  }
   desenharMarcadores(g);
 }
+// MODO_DEV: abra o site com ?dev=1 para ver painéis de teste, comandos digitados e a grade
+const MODO_DEV = /[?&]dev=1/.test(location.search);
+/* GRADE_VISIVEL: letras (A a E), números (1 a 9) e xadrez das casas na arena. false = arena limpa. */
+const GRADE_VISIVEL = { marcadores: MODO_DEV, xadrez: MODO_DEV };
 function desenharMarcadores(g) {
+  if (!GRADE_VISIVEL.marcadores) return;
   g.font = "800 20px Grandstander, 'Trebuchet MS', sans-serif";
   g.textAlign = "center"; g.textBaseline = "middle";
   for (let r = 0; r < G.rows; r++) {
@@ -5097,8 +5104,8 @@ addEventListener("keydown", e => {
   else if (k === "Q") alternarMao();                                       // abre/guarda as cartas grandes embaixo
   else if (k === " ") agendar({ tipo: "orbes", lado: ladoQueJoga() });
   else if (buffer === "") {
-    if (LINHAS.includes(k) && k.length === 1) buffer = k;
-    else if (k === "Z") buffer = "Z";
+    if (MODO_DEV && LINHAS.includes(k) && k.length === 1) buffer = k;      // comandos digitados (A3, ZC...): só no modo desenvolvedor
+    else if (MODO_DEV && k === "Z") buffer = "Z";
     else if (k === "X") paAtiva = !paAtiva;                                   // liga ou desliga a pá
     else if (modoM && /^[1-9]$/.test(k)) clicarMonstro(+k - 1, "teclado");     // modo Monsters: 1 a 6 escolhem o monstro
     else if (/^[1-9]$/.test(k) && +k <= cartas.length) { cartaSel = +k - 1; paAtiva = false; modoSel = "guerreiro"; }   // escolhe o card
@@ -5143,7 +5150,7 @@ if ($("btnMenu")) $("btnMenu").addEventListener("click", () => { if (window.INTR
 if ($("jgMenu")) $("jgMenu").addEventListener("click", () => { if (window.INTRO_ABRIR_MENU) window.INTRO_ABRIR_MENU(); });
 if ($("jgTela")) $("jgTela").addEventListener("click", () => alternarTelaCheia());
 addEventListener("keydown", e => {
-  if (e.key !== "F2") return;
+  if (e.key !== "F2" || !/[?&]dev=1/.test(location.search)) return;   // só no modo desenvolvedor (?dev=1)
   const dev = document.documentElement.classList.toggle("tela-jogo") === false;
   try { localStorage.setItem("hvm_dev", dev ? "1" : "0"); } catch {}
   requestAnimationFrame(ajustarResolucao); e.preventDefault();
