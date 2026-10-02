@@ -367,12 +367,13 @@ for (const b of $("botoesMenu").querySelectorAll(".bm")) {
 }
 // janelas
 let janelaAberta = null;
-function abrirJanela(id) { janelaAberta = $(id); janelaAberta.classList.add("on"); const b = janelaAberta.querySelector(".jb.ouro") || janelaAberta.querySelector(".jb"); b && b.focus(); }
+function abrirJanela(id) { janelaAberta = $(id); janelaAberta.classList.add("on"); intro.classList.add("com-janela"); const b = janelaAberta.querySelector(".jb.ouro") || janelaAberta.querySelector(".jb"); b && b.focus(); }
 function fecharJanela() {
   if (janelaAberta && janelaAberta.id === "janelaBusca" && busca && busca.ativa) {   // fechou a busca: sai da fila
     busca.ativa = false; if (window.CONTA) window.CONTA.rpc("sair_da_fila").catch(() => {});
   }
   if (janelaAberta) janelaAberta.classList.remove("on"); janelaAberta = null;
+  intro.classList.remove("com-janela");
 }
 for (const el of document.querySelectorAll(".janela-fundo")) {
   el.addEventListener("click", e => { if (e.target === el || e.target.hasAttribute("data-fechar")) { somClique(false); fecharJanela(); } });

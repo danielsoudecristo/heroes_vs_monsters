@@ -69,6 +69,9 @@ html.tela-jogo #fundoBorrado{display:block; position:fixed; inset:0; z-index:-1}
 /* MOLDURA: laterais com a continuação da imagem (ou a imagem desfocada, se ainda não existir a versão "_largo") */
 .moldura{background:#07060b center/cover no-repeat; filter:blur(26px) brightness(.5) saturate(1.2); transform-origin:center}
 #introMoldura{position:absolute; inset:0}
+/* janela aberta (PvP, Personagens, Ranking, Opções...): o escuro cobre também as laterais */
+#introMoldura::before{content:""; position:absolute; inset:0; z-index:1; pointer-events:none; background:rgba(4,4,10,.62); opacity:0; transition:opacity .25s}
+.intro.com-janela #introMoldura::before{opacity:1}
 #introMoldura::after{content:""; position:absolute; inset:0; pointer-events:none}
 #introMoldura[data-tela="carga"]::after{background:linear-gradient(180deg,rgba(5,4,12,.72) 0%,rgba(5,4,12,.1) 30%,rgba(5,4,12,0) 60%,rgba(5,4,12,.82) 100%)}
 #introMoldura[data-tela="login"]::after{background:rgba(8,6,16,.75)}
@@ -273,8 +276,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 .tela-menu::after{content:""; position:absolute; inset:0; pointer-events:none;
   background:radial-gradient(ellipse 36% 70% at 50% 55%,rgba(6,7,14,.62),rgba(6,7,14,0) 100%),
              linear-gradient(180deg,rgba(6,7,14,.55),rgba(6,7,14,0) 32%,rgba(6,7,14,0) 80%,rgba(6,7,14,.6))}
-.tela-menu[data-lado="monsters"]::before{content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
-  background:radial-gradient(ellipse 60% 50% at 80% 100%,rgba(90,200,40,.16),transparent 70%)}
+/* (sem o brilho verde embaixo do menu dos Monsters: ele aparecia só no 16:9) */
 .intro canvas{aspect-ratio:auto; cursor:inherit}   /* o jogo usa canvas{width:100%}: aqui não */
 .campeao{position:absolute; z-index:2; pointer-events:none; width:auto; height:auto}
 .botoes-menu{position:absolute; left:50%; top:228px; transform:translateX(-50%); width:392px; z-index:3; display:flex; flex-direction:column; gap:14px}
