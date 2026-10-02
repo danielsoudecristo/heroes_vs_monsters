@@ -620,7 +620,7 @@ const GUERREIROS = {
     }
   },
   protetor: {
-    nome: "Guerreiro Protetor", nomeCurto: "Protetor", desc: "Ergue o escudo e segura os monstros", visual: "sprite",
+    nome: "Protetor G", nomeCurto: "Protetor", desc: "Ergue o escudo e segura os monstros", visual: "sprite",
     custo: 75, recarga: 18, quantidade: null, inicio: 0, vida: 1000,
     defesa: 0.6,            // com o escudo erguido recebe só 40% do dano (0.6 = bloqueia 60%)
     alcanceEscudo: 210,     // começa a erguer o escudo quando um monstro chega a umas 2 casas
@@ -5626,8 +5626,8 @@ function podeAvancar() {
 function abandonoDoOutro() {
   if (fim || !pvp) return;
   rede.wo = true;
-  encerrarPvp(pvp.ladoLocal);                                // o outro sumiu: você fica com a vitória na tela...
-  $("fimTxt").textContent = "O adversário saiu da partida. Ela não vale troféus (os dois precisam confirmar o resultado).";
+  encerrarPvp(pvp.ladoLocal);                                // o outro sumiu: vitória por W.O.
+  $("fimTxt").textContent = "O adversário saiu da partida: vitória por W.O.!";
 }
 // começa uma partida online (chamado pelo menu, depois que o servidor achou a sala)
 async function comecarOnline(info) {
@@ -5651,20 +5651,19 @@ async function finalizarOnline(vencedor) {
   r.finalizando = true;
   const resumo = r.wo ? "wo" : fotoDaPartida().resumo;
   try { r.canal.enviar({ tipo: "sair" }); } catch {}
+  // RESULTADO: o primeiro aparelho que termina já grava para os dois (não precisa esperar o outro)
   let sala = null;
-  try {
-    sala = await window.CONTA.rpc("finalizar_pvp", { p_sala: r.sala, p_vencedor: vencedor || "empate", p_resumo: resumo });
-    for (let i = 0; i < 10 && sala && !sala.finalizada; i++) { await new Promise(ok => setTimeout(ok, 2000)); sala = await window.CONTA.rpc("ver_sala", { p_sala: r.sala }); }
-  } catch (e) { console.error(e); }
+  for (let tentativa = 0; tentativa < 3 && !sala; tentativa++) {
+    try { sala = await window.CONTA.rpc("finalizar_pvp", { p_sala: r.sala, p_vencedor: vencedor || "empate", p_resumo: resumo }); }
+    catch (e) { console.error(e); await new Promise(ok => setTimeout(ok, 1500)); }
+  }
   try { r.canal.sair(); } catch {}
   if (rede === r) rede = null;
-  if (window.PERFIL && PERFIL.recarregar) await PERFIL.recarregar();
-  if (!sala || !sala.finalizada) $("fimTxt").textContent += " (O resultado ainda não foi confirmado pelo adversário.)";
-  else if (sala.vencedor === "divergente") $("fimTxt").textContent += " ⚠ Os dois aparelhos viram partidas diferentes: não valeu troféus.";
-  else {
-    const venci = sala.vencedor === r.ladoLocal, emp = sala.vencedor === "empate";
+  if (window.PERFIL && PERFIL.recarregar) { await PERFIL.recarregar(); PERFIL.esquecerRanking && PERFIL.esquecerRanking(); }
+  if (sala && sala.finalizada) {
+    const v = sala.vencedor, venci = v === r.ladoLocal, emp = v === "empate";
     $("fimTxt").textContent += venci ? " 🏆 +30 troféus · 🪙 +50 moedas" : emp ? " 🪙 +25 moedas" : " 🏆 −20 troféus · 🪙 +15 moedas";
-  }
+  } else $("fimTxt").textContent += " (Sem internet para gravar o resultado.)";
 }
 
 /* =====================================================================

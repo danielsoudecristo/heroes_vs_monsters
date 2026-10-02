@@ -684,7 +684,24 @@ const MOEDA_SVG = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill=
 const SELO = { heroes: '<span class="selo-lado heroes">🛡 Heroes</span>', monsters: '<span class="selo-lado monsters">💀 Monsters</span>' };
 let grupoPers = "heroes";
 function abrirPersonagens() { grupoPers = ladoMenu; montarPersonagens(); abrirJanela("janelaPersonagens"); }
-// miniatura do personagem: primeiro quadro da folha parada (ou andando) do jogo
+// miniatura do personagem: primeiro quadro da folha parada (ou andando), RECORTADO no desenho
+// (algumas folhas têm muito espaço vazio em volta, como a do Cavaleiro Sentinela: sem recortar ele ficava pequeno)
+const cacheMini = {};
+function recorteDoQuadro(an) {
+  const m = 2 * (an.grade && an.grade.ref ? an.cw / an.grade.ref : 1);
+  const w = Math.max(1, Math.round(an.cw - 2 * m)), h = Math.max(1, Math.round(an.ch - 2 * m));
+  const esc = Math.min(1, 256 / Math.max(w, h));                     // mede numa cópia pequena (rápido)
+  const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w * esc)); c.height = Math.max(1, Math.round(h * esc));
+  const x = c.getContext("2d", { willReadFrequently: true });
+  x.drawImage(an.img, m, m, w, h, 0, 0, c.width, c.height);
+  const d = x.getImageData(0, 0, c.width, c.height).data;
+  let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < c.height; y++) for (let xx = 0; xx < c.width; xx++) if (d[(y * c.width + xx) * 4 + 3] > 40) {
+    if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (x1 < 0) return { sx: m, sy: m, sw: w, sh: h };
+  return { sx: m + x0 / esc, sy: m + y0 / esc, sw: (x1 - x0 + 1) / esc, sh: (y1 - y0 + 1) / esc };
+}
 function miniatura(cv, grupo, id) {
   const S = window.JOGO && window.JOGO.sprites ? window.JOGO.sprites() : null, x = cv.getContext("2d");
   x.clearRect(0, 0, cv.width, cv.height);
@@ -694,11 +711,12 @@ function miniatura(cv, grupo, id) {
   if (!anims) return;
   const an = ["parado", "defendendo", "energia", "andar", "atacar", "lutar"].map(n => anims[n]).find(a => a && a.ok);
   if (!an) return;
-  const m = 2 * (an.grade && an.grade.ref ? an.cw / an.grade.ref : 1);
-  const w = an.cw - 2 * m, h = an.ch - 2 * m, k = Math.min(cv.width / w, cv.height / h) * .95;
+  const chave = grupo + ":" + id;
+  const r = cacheMini[chave] || (cacheMini[chave] = recorteDoQuadro(an));
+  const k = Math.min(cv.width / r.sw, cv.height / r.sh) * .92;      // todos ocupam o quadro do mesmo jeito
   x.save(); x.translate(cv.width / 2, cv.height / 2);
   if (grupo === "monsters" && an.olhaDireita) x.scale(-1, 1);
-  x.drawImage(an.img, m, m, w, h, -w * k / 2, -h * k / 2, w * k, h * k);
+  x.drawImage(an.img, r.sx, r.sy, r.sw, r.sh, -r.sw * k / 2, -r.sh * k / 2, r.sw * k, r.sh * k);
   x.restore();
 }
 function montarPersonagens() {
