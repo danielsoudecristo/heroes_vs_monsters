@@ -2374,9 +2374,16 @@ function atualizar(dt) {
       const cfgP = { ...MODO_MONSTERS.andar.padrao, ...(MODO_MONSTERS.andar[p.tipo] || {}) };
       const frente = criaturas.some(c => c.r === p.r && !c.morte && c.surgir > .3 && ladoB(c.x) === ladoB(p.x) && c.x - p.x > -5 && c.x - p.x < cfgP.para);
       if (p.trocaAndar > 0) p.trocaAndar -= dt;
-      if (!ocupado && !frente && p.vel > 0) {
+      // CERCO (PvP): no 2º quadrado antes do castelo inimigo ele para (o de longe atira; o de perto espera)
+      const xC = xCercoHerois(), noCerco = pvp && ladoB(p.x) && !p.cercoLivre && p.x >= xC - .5;
+      if (noCerco && !frente && !ocupado) {
+        if (CERCO.deLonge.includes(p.tipo)) { p.cercoT = (p.cercoT || 0) + dt; if (p.cercoT >= CERCO.cada) { p.cercoT = 0; atirarNoCastelo(p, "heroes"); } }
+        else { p.cercoEspera = (p.cercoEspera || 0) + dt; if (p.cercoEspera >= CERCO.esperaPerto) p.cercoLivre = true; }
+      }
+      if (!ocupado && !frente && p.vel > 0 && !noCerco) {
         if (!p.andando) p.trocaAndar = TROCA_ANDAR;                                   // começou a andar: troca suave
         p.andando = true; p.x += p.vel * dt;
+        if (pvp && ladoB(p.x) && !p.cercoLivre && p.x > xC) p.x = xC;                 // não passa do 2º quadrado
         p.tAndar += dt * p.vel / ({ ...MODO_MONSTERS.andar.padrao, ...(MODO_MONSTERS.andar[p.tipo] || {}) }).velocidade;   // anda mais rápido = passo mais rápido
         if (!ladoB(p.x) && !p.atravessou) conferirFenda(p, true);                       // PORTAL_TROPA: abre na frente
         if (!ladoB(p.x) && p.x >= PORTAO_X) atravessarPortao(p, MW - PORTAO_X + 6);   // PORTOES
@@ -2539,6 +2546,20 @@ function atualizar(dt) {
     }
     c.surgir = Math.min(1, c.surgir + dt / .7);
     if (c.morte) { c.morte += dt; continue; }
+    if (pvp && !ladoB(c.x) && c.atravessou !== false && !c.cercoLivre && c.surgir >= 1) {   // CERCO (PvP): 2º quadrado antes do castelo dos Heroes
+      const xC = xCercoMonstros();
+      if (c.x <= xC + .5) {
+        c.x = Math.max(c.x, xC);
+        const heroiNaFrente = plantas.some(p => p.r === c.r && !p.morte && !ladoB(p.x) && p.x < c.x + 10);
+        if (heroiNaFrente) { c.cercoLivre = true; c.fixo = false; }                // alguém entrou na frente: luta normal
+        else {
+          if (CERCO.deLonge.includes(c.tipo)) { c.cercoT = (c.cercoT || 0) + dt; if (c.cercoT >= CERCO.cada) { c.cercoT = 0; atirarNoCastelo(c, "monsters"); } }
+          else { c.cercoEspera = (c.cercoEspera || 0) + dt; if (c.cercoEspera >= CERCO.esperaPerto) c.cercoLivre = true; }
+          c.fixo = !c.cercoLivre;                                                    // parado respirando enquanto espera
+          if (!c.cercoLivre) { c.estado = "andar"; continue; }
+        }
+      }
+    }
     const gerador = c.tipo && PERSONAGENS[c.tipo].gerador;
     if (gerador) {                                            // ESQUELETO_BLACK: sentado, respirando e soltando energia
       c.vel = 0; c.estado = "andar"; c.tAnim += dt;
@@ -2972,10 +2993,22 @@ function desenharBarraCastelo() {
   if (vidaDeles > 0) { ctx.fillStyle = modoM ? "#4f8fe0" : "#9a4bd0"; rr(ebx, eby, ebw * vidaDeles / 100, ebh, ebh / 2); ctx.fill(); }
   ctx.font = "800 11px Grandstander, 'Trebuchet MS', sans-serif"; ctx.fillStyle = "#fff4d6";
   ctx.fillText(`${Math.ceil(vidaDeles)}`, ebx + ebw / 2, eby + ebh / 2 + 1);
-  // olhinho: clique para espiar
-  ctx.font = "800 10px Grandstander, 'Trebuchet MS', sans-serif"; ctx.fillStyle = sobreBarra || espiando ? "#f3e8ff" : "rgba(243,232,255,.7)";
-  ctx.fillText(espiando ? "👁 voltar" : "👁 espiar", ex + ew / 2, y + h - 5);
   ctx.restore();
+  // ESPIAR: botão bem visível em cima da barra inimiga (custo, ou o tempo que falta para voltar)
+  const falta = Math.max(0, Math.ceil((espiaAte - performance.now()) / 1000));
+  const rot = espiando ? `↩ VOLTAR · ${falta}s` : `👁 ESPIAR · ${ESPIAR.custo}⚡`;
+  ctx.save(); ctx.font = "900 15px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const bw2 = Math.max(ew - 6, ctx.measureText(rot).width + 28), bx2 = ex + ew / 2 - bw2 / 2, by2 = y - 34;
+  const pode = espiando || MODO_TESTE.energiaInfinita || energiaVista() >= ESPIAR.custo;
+  const gb = ctx.createLinearGradient(0, by2, 0, by2 + 28);
+  gb.addColorStop(0, pode ? "#c79bff" : "#6c6478"); gb.addColorStop(1, pode ? "#7b3fd0" : "#3b3546");
+  ctx.shadowColor = "rgba(0,0,0,.5)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
+  ctx.fillStyle = gb; rr(bx2, by2, bw2, 28, 14); ctx.fill(); ctx.shadowColor = "transparent";
+  ctx.lineWidth = 2.5; ctx.strokeStyle = "#1e1030"; ctx.stroke();
+  ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.strokeStyle = "#2a1244"; ctx.strokeText(rot, bx2 + bw2 / 2, by2 + 15);
+  ctx.fillStyle = "#fff7e0"; ctx.fillText(rot, bx2 + bw2 / 2, by2 + 15);
+  ctx.restore();
+  BARRAS.inimigo = { x: Math.min(ex, bx2), y: by2, w: Math.max(ew, bw2), h: y + h - by2 };   // o botão também é clicável
 }
 function desenharChefe() {
   const c = camp && camp.chefe;
@@ -4606,7 +4639,7 @@ function desenharCursorPa() {
 }
 function desenharOrbes() {
   for (const o of orbes) {
-    if (o.lado && o.lado !== ladoQueJoga() && o.estado === "coletando") continue;   // a energia do outro não voa para o seu botão
+    if (o.lado && o.lado !== ladoQueJoga()) continue;                              // PvP: a energia do adversário não aparece para você
     if (o.pegaLocal) continue;                                                      // ONLINE: você já pegou (o voo já apareceu)
     const p0 = posOrbe(o), p = p0.tela ? p0 : { ...p0, ...paraTela(p0.x, p0.y) };
     const acabando = o.estado === "parado" && o.vida > ENERGIA_CEU.duracao - 2;
@@ -4669,6 +4702,17 @@ function paraTela(x, y) {                                      // ponto do campo
    para voltar, clique na barra do seu castelo ou aperte Esc.
    VISAO: quando a carta espiã existir, "livre: false" vai exigir a carta (e energia) para espiar. */
 const VISAO = { livre: true, troca: 0.55 };          // troca = segundos do efeito de passar pelo portão
+// ESPIAR: quanto custa (energia) e quantos segundos você fica vendo a arena inimiga até voltar sozinho
+const ESPIAR = { custo: 50, duracao: 6 };
+var espiaAte = 0;
+function pedirEspiar() {
+  if (espiando) { espiar(false); return; }
+  if (!INTRO.jogando || fim || transVisao.t < 1) return;
+  if (!MODO_TESTE.energiaInfinita && energiaVista() < ESPIAR.custo) {
+    energiaFalha = .7; registrar("sistema", `Espiar custa ${ESPIAR.custo} de energia`, false); return;
+  }
+  agendar({ tipo: "espiar", lado: ladoQueJoga() });
+}
 const PORTAO_VISUAL = { largura: 46, altura: 250, y: (G.top + G.bottom) / 2 + 6 };
 let camX = 0, espiando = false;
 const transVisao = { t: 1, paraEspiar: false, trocou: true };
@@ -4680,6 +4724,7 @@ function espiar(sim) {
   transVisao.t = 0; transVisao.paraEspiar = sim; transVisao.trocou = false;
 }
 function atualizarVisao(dt) {
+  if (espiando && transVisao.t >= 1 && espiaAte && performance.now() > espiaAte) { espiaAte = 0; espiar(false); }   // tempo acabou: volta
   if (transVisao.t >= 1) return;
   transVisao.t = Math.min(1, transVisao.t + dt / VISAO.troca);
   if (!transVisao.trocou && transVisao.t >= .5) {          // no meio do efeito troca de arena
@@ -4767,12 +4812,16 @@ function desenharEspiando() {
   }
   document.documentElement.classList.toggle("jogo-pausado", !!(pausado && !fim && INTRO.jogando));
   if (!espiando) return;
-  const txt = "👁 Espiando a arena inimiga · clique na barra do seu castelo (ou Esc) para voltar";
-  ctx.save(); ctx.font = "800 16px Grandstander, 'Trebuchet MS', sans-serif";
-  const tw = ctx.measureText(txt).width + 36, x = (W - tw) / 2, y = 14 + cortTopo;
-  ctx.fillStyle = "rgba(20,14,28,.86)"; rr(x, y, tw, 34, 17); ctx.fill();
-  ctx.strokeStyle = "#b07cff"; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = "#f3e8ff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, W / 2, y + 18);
+  const falta = Math.max(0, Math.ceil((espiaAte - performance.now()) / 1000));
+  const txt = `👁 ARENA INIMIGA · volta em ${falta}s`;
+  ctx.save(); ctx.font = "900 22px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const tw = ctx.measureText(txt).width + 44, x = (W - tw) / 2, y = 12 + cortTopo;
+  const gb = ctx.createLinearGradient(0, y, 0, y + 42); gb.addColorStop(0, "#9b5ff0"); gb.addColorStop(1, "#4a1f86");
+  ctx.shadowColor = "rgba(0,0,0,.5)"; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4;
+  ctx.fillStyle = gb; rr(x, y, tw, 42, 21); ctx.fill(); ctx.shadowColor = "transparent";
+  ctx.lineWidth = 3; ctx.strokeStyle = "#1e1030"; ctx.stroke();
+  ctx.lineWidth = 6; ctx.lineJoin = "round"; ctx.strokeStyle = "#2a1244"; ctx.strokeText(txt, W / 2, y + 22);
+  ctx.fillStyle = "#fff7e0"; ctx.fillText(txt, W / 2, y + 22);
   ctx.restore();
 }
 
@@ -4939,6 +4988,7 @@ function desenhar() {
   for (const e of ents) e.f();
   F = 0;
   for (const s of tiros) desenharTiro(s);
+  desenharTirosCastelo();                                // CERCO: tiros indo para o castelo
   desenharExplosoes();
   desenharOndasTerra();
   desenharOndasOssos();
@@ -4986,12 +5036,17 @@ function desenhar() {
   }
   ctx.globalAlpha = 1;
 
-  ctx.font = "800 22px Grandstander, 'Trebuchet MS', sans-serif";
-  ctx.textAlign = "center"; ctx.lineWidth = 5; ctx.strokeStyle = C.ink; ctx.lineJoin = "round";
+  // TEXTOS_CARTOON: contorno grosso escuro, sombra embaixo e um brilho claro em cima
+  ctx.font = "900 24px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.textAlign = "center"; ctx.lineJoin = "round";
   for (const t of textos) {
-    const k = 1 - t.t / .8, s = t.t < .12 ? 1 + (1 - t.t / .12) * .5 : 1;
+    const k = 1 - t.t / .8, s = t.t < .12 ? 1 + (1 - t.t / .12) * .6 : 1;
     ctx.save(); ctx.globalAlpha = Math.min(1, k * 1.6); ctx.translate(t.x, t.y); ctx.scale(s, s);
-    ctx.strokeText(t.txt, 0, 0); ctx.fillStyle = t.cor; ctx.fillText(t.txt, 0, 0); ctx.restore();
+    ctx.lineWidth = 8; ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.strokeText(t.txt, 0, 3);    // sombra
+    ctx.lineWidth = 6; ctx.strokeStyle = "#1c1024"; ctx.strokeText(t.txt, 0, 0);               // contorno
+    ctx.fillStyle = t.cor; ctx.fillText(t.txt, 0, 0);
+    ctx.globalAlpha *= .35; ctx.fillStyle = "#ffffff"; ctx.fillText(t.txt, 0, -1.5);          // brilho
+    ctx.restore();
   }
   if (textoEspelhado) { textoEspelhado = false; ctx.restore(); }
 
@@ -5212,7 +5267,7 @@ cv.addEventListener("click", e => {
   const b = cv.getBoundingClientRect();
   const x = (e.clientX - b.left) * W / b.width, y = (e.clientY - b.top) * H / b.height;
   // ESPIAR: clique na barra do castelo inimigo para ver a arena dele; na do seu castelo para voltar
-  if (BARRAS.inimigo && naBarra(x, y, BARRAS.inimigo)) { espiar(!espiando); return; }
+  if (BARRAS.inimigo && naBarra(x, y, BARRAS.inimigo)) { pedirEspiar(); return; }
   if (BARRAS.meu && naBarra(x, y, BARRAS.meu) && espiando) { espiar(false); return; }
   if (espiando) return;                                        // espiando: não coloca nada
   const mw = paraMundo(x, y);                                   // onde o clique cai no jogo (com zoom)
@@ -5469,6 +5524,43 @@ if (document.fonts && document.fonts.load) document.fonts.load("800 20px Grandst
    Por dentro, a partida é SEMPRE igual nos dois aparelhos (heróis à esquerda, monstros à direita);
    quem joga de Monsters só vê a tela espelhada.
    ===================================================================== */
+/* CERCO (só no PvP): na arena inimiga, todo atacante PARA no 2º quadrado antes do castelo, para dar tempo de o
+   outro jogador colocar alguém na frente dele.
+   - Quem ataca de LONGE fica ali atirando no castelo até alguém derrubar ele.
+   - Quem luta de PERTO espera um pouco ali e depois vai até o castelo (se ninguém entrar na frente). */
+const CERCO = {
+  deLonge: ["arqueiro", "mago", "magoFogo", "esqueletoArqueiro", "esqueletoMago"],
+  cada: 2.0,          // segundos entre um tiro no castelo e outro
+  dano: 3,            // dano de cada tiro no castelo
+  esperaPerto: 3      // segundos que quem luta de perto espera no 2º quadrado
+};
+var tirosCastelo = [];                                 // tiros indo para o castelo (fazem parte da partida)
+function xCercoHerois() { return MW - celX(1); }       // 2º quadrado antes do castelo dos Monsters
+function xCercoMonstros() { return celX(1); }          // 2º quadrado antes do castelo dos Heroes
+function atirarNoCastelo(u, lado) {
+  const x1 = lado === "heroes" ? PORTAO_INIMIGO + 10 : G.left - 20;
+  tirosCastelo.push({ x0: u.x, y0: u.y - 60, x1, y1: u.y - 70, t: 0, dur: .55, lado, dano: CERCO.dano });
+}
+function atualizarCerco(dt) {
+  for (const t of tirosCastelo) {
+    t.t += dt;
+    if (t.t >= t.dur && !t.feito) {
+      t.feito = true;
+      if (t.lado === "heroes") ferirCasteloInimigo(t.dano, t.y1);          // heróis acertam o castelo dos Monsters
+      else { vida = Math.max(0, vida - t.dano); nucleoDor = 1; textos.push({ x: xVisto(t.x1 + 30), y: t.y1, txt: "-" + t.dano, cor: "#ff6b5e", t: 0 }); }
+    }
+  }
+  tirosCastelo = tirosCastelo.filter(t => !t.feito);
+}
+function desenharTirosCastelo() {
+  for (const t of tirosCastelo) {
+    const k = Math.min(1, t.t / t.dur), x = t.x0 + (t.x1 - t.x0) * k, y = t.y0 + (t.y1 - t.y0) * k - Math.sin(k * Math.PI) * 40;
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    const cor = t.lado === "heroes" ? "255,220,120" : "170,120,255";
+    const g = ctx.createRadialGradient(x, y, 1, x, y, 14); g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(.4, `rgba(${cor},.9)`); g.addColorStop(1, `rgba(${cor},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 14, 0, 7); ctx.fill(); ctx.restore();
+  }
+}
 const PVP = {
   duracao: 180, prorrogacao: 60,                       // segundos
   preparo: 25,                                         // PREPARO: segundos para montar a arena (ninguém anda até acabar)
@@ -5492,6 +5584,7 @@ function energiaACaminho() {
     if (a.tipo === "orbe") { const o = orbes.find(o => o.id === a.id); if (o && o.estado !== "coletando") d += o.valor; }
     else if (a.tipo === "colocar") { const c = cartas[a.carta]; if (c && GUERREIROS[c.id]) d -= GUERREIROS[c.id].custo; }
     else if (a.tipo === "monstroM") { const id = MONSTROS_CARTAS[a.idx]; if (id) d -= custoMonstro(id); }
+    else if (a.tipo === "espiar") d -= ESPIAR.custo;
   }
   return d;
 }
@@ -5524,6 +5617,7 @@ function desenharRespostaNaHora(dt) {
   }
 }
 function comecarPvp(lado) {
+  tirosCastelo = [];
   pvp = { ladoLocal: lado, tempo: PVP.duracao, preparo: PVP.preparo, prorrogacao: false, mortosH: 0, botT: 4, solT: 2, vencedor: undefined };
   ondas = false;
   const bo = document.getElementById("btnOndas"); if (bo) { bo.textContent = "Campanha: desligada"; bo.disabled = true; }
@@ -5648,7 +5742,7 @@ function mensagemRede(m) {                                   // chegou algo do a
 function acaoDoLado(a, lado) {
   if (a.tipo === "colocar" || a.tipo === "evoluir" || a.tipo === "remover") return lado === "heroes";
   if (a.tipo === "monstroM") return lado === "monsters";
-  if (a.tipo === "orbe" || a.tipo === "orbes") return true;
+  if (a.tipo === "orbe" || a.tipo === "orbes" || a.tipo === "espiar") return true;
   return false;
 }
 function enviarTurno(t) {
@@ -5777,12 +5871,20 @@ function aplicarAcao(a) {
   }
   else if (a.tipo === "orbe") { const o = orbes.find(o => o.id === a.id); if (o && (!o.lado || !a.lado || o.lado === a.lado)) coletar(o); }
   else if (a.tipo === "orbes") coletarTudo(a.lado);
+  else if (a.tipo === "espiar") {                                  // ESPIAR: gasta a energia de quem espiou
+    const usaM = pvp && a.lado === "monsters", saldo = usaM ? energiaM : energia;
+    if (MODO_TESTE.energiaInfinita || saldo >= ESPIAR.custo) {
+      if (!MODO_TESTE.energiaInfinita) { if (usaM) energiaM -= ESPIAR.custo; else energia -= ESPIAR.custo; }
+      if (!a.lado || a.lado === ladoQueJoga()) { espiar(true); espiaAte = performance.now() + ESPIAR.duracao * 1000; }
+    }
+  }
 }
 function passoDaPartida() {                                 // UM passo da partida (sempre igual em qualquer aparelho)
   aplicarAcoesDoPasso();                                    // FILA_ACOES: primeiro as ações marcadas para este passo
   atualizar(PASSO);
   atualizarFendas(PASSO);
   atualizarPvp(PASSO);                                      // PARTIDA_PVP: energia, tempo, bot e fim
+  if (pvp) atualizarCerco(PASSO);                           // CERCO: tiros no castelo
   passoN++;
 }
 // "foto" da partida: tudo o que importa para saber se dois aparelhos estão iguais
