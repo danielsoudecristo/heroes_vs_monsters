@@ -70,6 +70,7 @@ html.tela-jogo body{background:transparent}
 html.tela-jogo .palco{border:0; border-radius:0; box-shadow:none; background:#07060b;
   width:min(100vw, calc(100vh * 16 / 9)); height:min(100vh, calc(100vw * 9 / 16))}
 html.tela-jogo .palco canvas{width:100%; height:100%; display:block}
+html.tela-jogo .fim{z-index:7; background:rgba(12,8,20,.72)}   /* a tela do fim fica por cima de tudo, mais escura */
 html.tela-jogo .palco:fullscreen{width:100vw; height:100vh}
 html.tela-jogo .palco:fullscreen canvas{width:min(100vw, calc(100vh * 16 / 9)); height:auto}
 /* PREENCHER_TELA: o jogo ocupa a largura toda; o que sobra em cima (céu) fica fora da tela */
@@ -646,7 +647,8 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
       <div>
         <h2 id="fimTitulo">O castelo caiu</h2>
         <p id="fimTxt"></p>
-        <button class="forte" id="btnRecomecar2">Recomeçar</button>
+        <button class="forte" id="btnRecomecar2">Jogar de novo</button>
+        <button class="forte" id="btnMenuFim" style="margin-left:10px">Menu</button>
       </div>
     </div>
   </div>

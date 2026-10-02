@@ -5055,7 +5055,7 @@ function mostrarTelaDerrota() {
 }
 function terminar() {
   if (pvp) return;                                             // PARTIDA_PVP: o fim é decidido no atualizarPvp
-  fim = true;
+  fim = true; mao.aberta = false;
   espiando = false; camX = 0; transVisao.t = 1;                 // derrota: volta para a sua arena
   const qual = (modoM ? "monsters_" : "heroes_") + (noiteAtual ? "noite" : "dia");   // o castelo do seu lado caindo
   const v = VIDEOS_FIM[qual].ok ? VIDEOS_FIM[qual] : null;       // só o vídeo do mesmo cenário (nunca o da noite num nível de dia)
@@ -5150,6 +5150,7 @@ $("btnRecomecar").addEventListener("click", recomecar);
 $("btnRecomecar2").addEventListener("click", recomecar);
 // botão "Menu": para o jogo e abre o menu (lá tem "Continuar")
 if ($("btnMenu")) $("btnMenu").addEventListener("click", () => { if (window.INTRO_ABRIR_MENU) window.INTRO_ABRIR_MENU(); });
+if ($("btnMenuFim")) $("btnMenuFim").addEventListener("click", () => { $("fim").classList.remove("on"); if (window.INTRO_ABRIR_MENU) window.INTRO_ABRIR_MENU(); });
 // TELA_DO_JOGO: botões redondos em cima à direita (menu e tela cheia) e F2 para os painéis de teste
 if ($("jgMenu")) $("jgMenu").addEventListener("click", () => { if (window.INTRO_ABRIR_MENU) window.INTRO_ABRIR_MENU(); });
 if ($("jgTela")) $("jgTela").addEventListener("click", () => alternarTelaCheia());
@@ -5546,6 +5547,7 @@ function atualizarPvp(dt) {
 }
 function encerrarPvp(vencedor) {
   fim = true; pvp.vencedor = vencedor;
+  mao.aberta = false;                                         // as cartas se escondem na tela do fim
   const eu = pvp.ladoLocal, venceu = vencedor === eu, empate = vencedor === null;
   const minha = eu === "heroes" ? vida : vidaInimigo, deles = eu === "heroes" ? vidaInimigo : vida;
   const meus = eu === "heroes" ? abatidas : pvp.mortosH, delesK = eu === "heroes" ? pvp.mortosH : abatidas;
