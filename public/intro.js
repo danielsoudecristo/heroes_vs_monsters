@@ -49,6 +49,40 @@ function carregarImagem(img, nomes) {
   img.src = lista[0];
 }
 document.querySelectorAll("img[data-fotos]").forEach(img => carregarImagem(img, [img.dataset.fotos]));
+/* ---------- MOLDURA (laterais): o jogo fica sempre em 16:9; o espaço que sobra dos lados (celular) mostra a
+   CONTINUAÇÃO da imagem. Cada tela procura "<imagem>_largo" (2560 x 1080, .jpg/.png/.webp) na mesma pasta.
+   Se não existir, mostra a própria imagem desfocada (como antes). ---------- */
+const MOLDURA = { escurecerLados: .35 };       // 0 = sem escurecer as laterais; .35 = levemente mais escuras
+function achaImagem(nomes, ok, falhou) {
+  const lista = []; for (const n of nomes) for (const e of ["jpg", "png", "webp"]) lista.push(n + "." + e);
+  let i = 0; const im = new Image();
+  im.onload = () => ok(im.src); im.onerror = () => { if (++i < lista.length) im.src = lista[i]; else falhou && falhou(); };
+  im.src = lista[0];
+}
+function aplicarMoldura(el, base, espelhar) {
+  if (!el) return;
+  el.style.transform = espelhar ? "scaleX(-1)" : "";
+  if (el.dataset.base === base) return;
+  el.dataset.base = base;
+  achaImagem([base + "_largo"], src => {
+    if (el.dataset.base !== base) return;
+    const e = MOLDURA.escurecerLados;
+    el.style.backgroundImage = `linear-gradient(90deg, rgba(0,0,0,${e}) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,0) 86%, rgba(0,0,0,${e}) 100%), url("${src}")`;
+    el.classList.add("larga"); ajustarMolduras();
+  }, () => achaImagem([base], src => {                     // sem a imagem larga: a imagem normal desfocada
+    if (el.dataset.base !== base) return;
+    el.style.backgroundImage = `url("${src}")`; el.classList.remove("larga"); el.style.backgroundSize = "";
+  }));
+}
+// a imagem larga tem a altura exata do jogo, para o meio dela ficar certinho atrás do jogo
+function ajustarMolduras() {
+  const k = Math.min(innerWidth / 1280, innerHeight / 720), alt = 720 * k;
+  for (const el of document.querySelectorAll(".moldura.larga")) {
+    el.style.backgroundSize = `100% ${alt}px, auto ${alt}px`;
+  }
+}
+addEventListener("resize", ajustarMolduras);
+window.MOLDURA_APLICAR = aplicarMoldura;
 const intro = $("intro"), palco = $("introPalco"), logo = $("logo");
 const telas = { carga: $("telaCarga"), login: $("telaLogin"), lado: $("telaLado"), menu: $("telaMenu") };
 let telaAtual = "carga";
@@ -118,6 +152,13 @@ function desenharBrasas(dt, t) {
 function irPara(nome) {
   for (const k in telas) telas[k].classList.toggle("on", k === nome);
   telaAtual = nome;
+  molduraDaTela();
+}
+function molduraDaTela() {                                   // qual imagem vai nas laterais de cada tela
+  const base = telaAtual === "lado" ? "Menu/escolher_lado"
+    : telaAtual === "menu" ? (ladoMenu === "monsters" ? "Fundo/arena_monsters_noite" : "Fundo/arena_guerreiro_noite")
+    : "Menu/carregando";
+  aplicarMoldura($("introMoldura"), base, false);
 }
 
 /* ================= 1) CARREGAMENTO ================= */
@@ -247,6 +288,7 @@ function flash() { const c = $("clarao"); c.classList.remove("vai"); void c.offs
 
 /* ================= 3) MENU ================= */
 let ladoMenu = "heroes";
+setTimeout(molduraDaTela, 0);                                  // laterais da primeira tela (carregando)
 const BRASOES = {
   heroes: '<svg viewBox="0 0 40 40"><path d="M20 3l14 5v10c0 9-6 15-14 19C12 33 6 27 6 18V8z" fill="#2a4a9c" stroke="#f6c343" stroke-width="2.5"/><path d="M20 10c-2 3-2 6 0 9 2-3 2-6 0-9zM14 17c0 3 2 5 6 5 4 0 6-2 6-5M20 22v7M16 26h8" fill="none" stroke="#f6c343" stroke-width="2" stroke-linecap="round"/></svg>',
   monsters: '<svg viewBox="0 0 40 40"><path d="M20 4c-8 0-13 5-13 12 0 4 2 7 5 9v5h16v-5c3-2 5-5 5-9 0-7-5-12-13-12z" fill="#e8dfc8" stroke="#1a1208" stroke-width="2"/><circle cx="14.5" cy="17" r="3.4" fill="#8be03c"/><circle cx="25.5" cy="17" r="3.4" fill="#8be03c"/><path d="M20 21l-2 4h4zM15 30v3M20 30v3M25 30v3" stroke="#1a1208" stroke-width="2" fill="#1a1208"/></svg>'
@@ -254,6 +296,7 @@ const BRASOES = {
 function abrirMenu(lado) {
   ladoMenu = lado || ladoMenu;
   telas.menu.dataset.lado = ladoMenu;
+  molduraDaTela();
   const fundoMenu = $("menuFundo");
   if (fundoMenu && fundoMenu.dataset.lado !== ladoMenu) { fundoMenu.dataset.lado = ladoMenu; carregarImagem(fundoMenu, FUNDO_MENU[ladoMenu]); }
   $("perfilLado").textContent = ladoMenu === "monsters" ? "Monsters" : "Heroes";

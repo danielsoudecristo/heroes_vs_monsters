@@ -63,10 +63,14 @@ html.tela-jogo .wrap{max-width:none; padding:0; height:100vh; display:grid; plac
 html.tela-jogo .topo, html.tela-jogo .painel{display:none}
 /* LATERAIS: em tela mais comprida que o jogo (celular), o espaço dos lados mostra o cenário desfocado em vez de preto */
 #fundoBorrado{display:none}
-html.tela-jogo #fundoBorrado{display:block; position:fixed; inset:-60px; z-index:-1; background:#07060b center/cover no-repeat; filter:blur(26px) brightness(.5) saturate(1.2)}
+html.tela-jogo #fundoBorrado{display:block; position:fixed; inset:0; z-index:-1}
+/* MOLDURA: laterais com a continuação da imagem (ou a imagem desfocada, se ainda não existir a versão "_largo") */
+.moldura{background:#07060b center/cover no-repeat; filter:blur(26px) brightness(.5) saturate(1.2); transform-origin:center}
+#introMoldura{position:absolute; inset:0}
+.moldura:not(.larga){inset:-60px !important}
+.moldura.larga{filter:none; background-position:center, center; background-repeat:no-repeat, no-repeat; background-color:#07060b}
 html.tela-jogo body{background:transparent}
-.intro::before{content:""; position:absolute; inset:-60px; background:url("Menu/carregando.png") center/cover no-repeat, url("Menu/carregando.jpg") center/cover no-repeat;
-  filter:blur(26px) brightness(.45); pointer-events:none}
+/* (as laterais do intro agora são a .moldura #introMoldura) */
 html.tela-jogo .palco{border:0; border-radius:0; box-shadow:none; background:#07060b;
   width:min(100vw, calc(100vh * 16 / 9)); height:min(100vh, calc(100vw * 9 / 16))}
 html.tela-jogo .palco canvas{width:100%; height:100%; display:block}
@@ -478,6 +482,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 <!-- ================= INTRO (carregamento, escolha do lado e menu) =================
      Os textos e botões ficam aqui; as animações ficam em public/intro.js. -->
 <div class="intro" id="intro">
+  <div class="moldura" id="introMoldura"></div>
   <div class="intro-palco" id="introPalco">
 
     <!-- 1) Carregamento -->
@@ -623,7 +628,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 </div>
 <!-- ================= fim do INTRO ================= -->
 
-<div id="fundoBorrado"></div>
+<div id="fundoBorrado" class="moldura"></div>
 <div class="wrap">
   <div class="topo">
     <div>

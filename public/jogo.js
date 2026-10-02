@@ -2644,6 +2644,13 @@ const FUNDOS = {
   monsters_noite: ["Fundo/arena_monsters_noite", "Fundo/arena_guerreiro_noite", "Fundo/fundo_do_jogo2"]
 };
 let fundoComImagem = false;
+var chaveFundo = "heroes_noite", chaveFundoInimigo = "monsters_noite";
+// MOLDURA (laterais): mostra a continuação da arena que está na tela (ao espiar, a do inimigo, virada)
+function atualizarMolduraJogo() {
+  if (!window.MOLDURA_APLICAR) return;
+  const esp = typeof espiando !== "undefined" && espiando;
+  window.MOLDURA_APLICAR(document.getElementById("fundoBorrado"), FUNDOS[esp ? chaveFundoInimigo : chaveFundo][0], esp);
+}
 
 /* Fogo das tochas: chama viva, luz tremendo e faíscas subindo, em loop, por cima das tochas pintadas.
    x, y = boca da tocha (onde a chama nasce) e h = altura da chama, em pixels do jogo (1280×720).
@@ -2680,6 +2687,7 @@ let fundoDesenhado = false;
 function definirNoite(noite) {
   noiteAtual = noite; fundoDesenhado = false;
   const dn = noite ? "noite" : "dia";
+  chaveFundo = (modoM ? "monsters_" : "heroes_") + dn; chaveFundoInimigo = (modoM ? "heroes_" : "monsters_") + dn;
   imgFundo = IMGS_FUNDO[(modoM ? "monsters_" : "heroes_") + dn];           // a sua arena (esquerda)
   imgFundoInimigo = IMGS_FUNDO[(modoM ? "heroes_" : "monsters_") + dn];    // a do outro lado (direita, virada)
   if (imgFundo.complete && imgFundo.naturalWidth) desenharFundoImagem();
@@ -2693,8 +2701,7 @@ function desenharFundoImagem() {
   g.fillStyle = "#0b0912"; g.fillRect(0, 0, 2 * W, H);
   // a sua arena inteira na esquerda
   g.drawImage(imgFundo, 0, 0, W, H);
-  const borrado = document.getElementById("fundoBorrado");
-  if (borrado && imgFundo.src) borrado.style.backgroundImage = `url("${imgFundo.src}")`;
+  atualizarMolduraJogo();
   // a arena do outro lado inteira, virada (castelo dele na ponta direita): você vê a dela igual ele vê a sua
   const temInimigo = imgFundoInimigo.complete && imgFundoInimigo.naturalWidth;
   if (temInimigo) { g.save(); g.translate(2 * W, 0); g.scale(-1, 1); g.drawImage(imgFundoInimigo, 0, 0, W, H); g.restore(); }
@@ -4643,6 +4650,7 @@ function atualizarVisao(dt) {
   if (!transVisao.trocou && transVisao.t >= .5) {          // no meio do efeito troca de arena
     transVisao.trocou = true; espiando = transVisao.paraEspiar;
     camX = espiando ? MW - W : 0;
+    atualizarMolduraJogo();
   }
 }
 // passou pelo portão: some de um lado e aparece do outro
@@ -5056,7 +5064,7 @@ function mostrarTelaDerrota() {
 function terminar() {
   if (pvp) return;                                             // PARTIDA_PVP: o fim é decidido no atualizarPvp
   fim = true; mao.aberta = false;
-  espiando = false; camX = 0; transVisao.t = 1;                 // derrota: volta para a sua arena
+  espiando = false; camX = 0; transVisao.t = 1;                 // derrota: volta para a sua arena atualizarMolduraJogo();
   const qual = (modoM ? "monsters_" : "heroes_") + (noiteAtual ? "noite" : "dia");   // o castelo do seu lado caindo
   const v = VIDEOS_FIM[qual].ok ? VIDEOS_FIM[qual] : null;       // só o vídeo do mesmo cenário (nunca o da noite num nível de dia)
   if (!v) registrar("sistema", VIDEOS_FIM[qual].erro || `O vídeo de ${nomeVideo(qual)} ainda não carregou.`, false);
@@ -5081,7 +5089,7 @@ function recomecar() {
   for (const q in VIDEOS_FIM) { VIDEOS_FIM[q].el.pause(); VIDEOS_FIM[q].el.currentTime = 0; }
   videoFundo = null; videoFimTocando = false;
   novoEstado();
-  espiando = false; camX = 0; transVisao.t = 1;                // volta para a sua arena
+  espiando = false; camX = 0; transVisao.t = 1;                // volta para a sua arena atualizarMolduraJogo();
   fendas = [];
   if (pvp) comecarPvp(pvp.ladoLocal);                          // PARTIDA_PVP: recomeça a batalha
   if (loopMusica.audio) loopMusica.audio.currentTime = 0;   // música recomeça do início
@@ -5264,7 +5272,7 @@ cv.addEventListener("contextmenu", e => e.preventDefault());   // botão direito
 // Ajusta a resolução ao tamanho real na tela, para não ficar borrado quando o jogo cresce
 /* PREENCHER_TELA: em telas mais compridas que o jogo (celular 20:9), o jogo ocupa a largura toda e corta
    um pouco do céu em cima (e quase nada embaixo), como o Plants vs Zombies. O HUD sobe junto para não ser cortado. */
-const PREENCHER = { ligado: true, parteDeBaixo: 0.2 };       // parteDeBaixo: quanto do corte vai para baixo (o resto sai do céu)
+const PREENCHER = { ligado: false, parteDeBaixo: 0.2 };       // parteDeBaixo: quanto do corte vai para baixo (o resto sai do céu)
 var cortTopo = 0, cortBase = 0;
 function layoutPreencher() {
   const telaJogo = document.documentElement.classList.contains("tela-jogo");
@@ -5329,7 +5337,7 @@ window.JOGO = {
     INTRO.lado = lado || "heroes";
     modoM = INTRO.lado === "monsters";
     MONSTROS_EM_CIMA = false;               // os cards ficam embaixo (mão de cartas), nos dois lados
-    espiando = false; camX = 0; transVisao.t = 1; fendas = [];
+    espiando = false; camX = 0; transVisao.t = 1; fendas = []; atualizarMolduraJogo();
     recomecar();
     modoSel = modoM ? "monstro" : "guerreiro"; monstroSel = 0; paAtiva = false; mao.aberta = false; BARRA.recolhida = false;
     if (modoM && !pvp) mostrarBanner("NÍVEL 1", "Coloque seus esqueletos: os heróis estão chegando!", 3.4);
