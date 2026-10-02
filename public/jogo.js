@@ -25,6 +25,22 @@ const reduzMov = matchMedia("(prefers-reduced-motion: reduce)").matches;
    Para adicionar o ataque do Esqueleto: crie Esqueleto/atacando/atacando.png
    e descomente a linha "atacar" abaixo, ajustando cols, quadros e o tamanho do quadro. */
 const PERSONAGENS = {
+  // ESQUELETO_BLACK: a "Elara" dos Monsters. Fica sentado na casa, respirando, e solta energia das mãos a cada ciclo.
+  esqueletoBlack: {
+    nome: "Esqueleto Black", nomeCurto: "Esq. Black",
+    desc: "Medita sentado e solta energia das mãos para os Monsters",
+    cores: ["#2b2433", "#c9e04a"],
+    cor: "#e8dfc8",
+    escala: 0.5,
+    velocidade: 1,          // não anda (fica na casa onde foi colocado)
+    vida: 200,
+    dano: 0,
+    gerador: { valor: 25, quadro: 110, x: 0, y: -58 },   // energia que solta, quadro em que ela sai e de onde sai (a partir dos pés)
+    anims: {
+      // 120 quadros em loop: junta a energia nas mãos e solta no fim do ciclo (~10 s)
+      andar: { src: "Esqueleto Black/energia/energia.png", cols: 8, quadros: 120, cw: 191, ch: 206, ax: 98, ay: 205, fps: 12 }
+    }
+  },
   esqueleto: {
     nome: "Esqueleto",
     desc: "Anda até o castelo e golpeia quem estiver na frente",
@@ -831,7 +847,8 @@ const MODO_MONSTERS = {
   // cada monstro custa a mesma energia (e tem a mesma recarga) do guerreiro "par" dele
   par: {
     esqueleto: "nick", esqueletoFogo: "magoFogo", esqueletoArqueiro: "arqueiro",
-    esqueletoProtetor: "protetor", esqueletoMago: "mago", esqueletoTita: "sentinela"
+    esqueletoProtetor: "protetor", esqueletoMago: "mago", esqueletoTita: "sentinela",
+    esqueletoBlack: "elara"            // mesmo custo e recarga da Elara
   },
   respirar: 0.018                  // monstro parado "respirando" (0 = desliga; 0.03 = mais forte)
 };
@@ -1301,9 +1318,9 @@ function removerGuerreiro(r, c, pos) {
   return { ok: true, msg: `${GUERREIROS[p.tipo].nome} removido de ${pos}` };
 }
 function soltarCriatura(r, escolhido, xFixo) {
-  const ids = prontos();
+  const ids = prontos(), soltos = ids.filter(id => !PERSONAGENS[id].gerador);   // o Esqueleto Black só entra quando alguém coloca
   const tipo = escolhido && ids.includes(escolhido) ? escolhido
-    : ids.length ? ids[Math.floor(sorte() * ids.length)] : null;
+    : soltos.length ? soltos[Math.floor(sorte() * soltos.length)] : null;
   const per = tipo ? PERSONAGENS[tipo] : null;
   const c = {
     r, tipo, x: xFixo ?? PORTAO_INIMIGO + rand(0, 30), y: G.top + r * G.ch + G.ch - 14,   // xFixo: colocado numa casa do gramado
@@ -2522,6 +2539,19 @@ function atualizar(dt) {
     }
     c.surgir = Math.min(1, c.surgir + dt / .7);
     if (c.morte) { c.morte += dt; continue; }
+    const gerador = c.tipo && PERSONAGENS[c.tipo].gerador;
+    if (gerador) {                                            // ESQUELETO_BLACK: sentado, respirando e soltando energia
+      c.vel = 0; c.estado = "andar"; c.tAnim += dt;
+      const an = PERSONAGENS[c.tipo].anims.andar, qt = c.tAnim * an.fps;
+      const ciclo = Math.floor(qt / an.quadros), q = Math.floor(qt) % an.quadros;
+      if (c.surgir >= 1 && q >= gerador.quadro && c.cicloEnergia !== ciclo) {
+        c.cicloEnergia = ciclo;
+        const ox = pvp ? c.x + gerador.x : xVisto(c.x) + gerador.x;    // fora do PvP a energia fica na posição da tela
+        criarOrbe(ox, c.y + gerador.y, c.y - rand(4, 20), gerador.valor, true, pvp ? "monsters" : null);
+        if (GUERREIROS.elara && GUERREIROS.elara.sons) somPersonagem(GUERREIROS.elara, "gerar", .5);
+      }
+      continue;
+    }
     if (c.tipo && PERSONAGENS[c.tipo].efeito === "fogo") {
       const per = PERSONAGENS[c.tipo], an = per.anims.andar;
       const q = Math.floor(c.tAnim * an.fps) % an.quadros;
@@ -3800,7 +3830,7 @@ function desenharDestaques() {
 /* ---------- Barra de cards ---------- */
 // Dois painéis: guerreiros (esquerda, com energia e pá) e monstros (direita).
 // Cards de monstro, na ordem da barra (null = espaço livre para um monstro novo)
-const MONSTROS_CARTAS = ["esqueleto", "esqueletoFogo", "esqueletoArqueiro", "esqueletoProtetor", "esqueletoMago", "esqueletoTita"];
+const MONSTROS_CARTAS = ["esqueletoBlack", "esqueleto", "esqueletoFogo", "esqueletoArqueiro", "esqueletoProtetor", "esqueletoMago", "esqueletoTita"];
 // As posições são calculadas pela quantidade de cards: se entrar um guerreiro novo, a barra se ajusta sozinha
 const CARTA = { w: 74, h: 110, y: 17, passo: 79 };
 const CARDS_EM_CIMA = false;   // false = os cards dos guerreiros ficam só embaixo (mão de cartas); true = volta a barra de cima

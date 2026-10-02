@@ -343,7 +343,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 .jb:hover{filter:brightness(1.15)} .jb:active{transform:translateY(2px)}
 .jb:focus-visible, .bm:focus-visible{box-shadow:0 0 0 3px #fff, 0 0 0 6px var(--ouro2)}
 .chave{min-width:110px}
-.brasas{position:absolute; inset:0; z-index:4; pointer-events:none; width:100%; height:100%}
+.brasas{display:none}   /* (sem os pontinhos brilhando: eles ficavam só no 16:9) */
 @media (prefers-reduced-motion:reduce){
   .logo.desce{animation-duration:.01s; animation-delay:0s} .tela-carga .cobre, .carga-fill::after{animation:none}
 }
