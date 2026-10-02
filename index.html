@@ -56,6 +56,20 @@ h1{
 .palco{position:relative; border-radius:18px; overflow:hidden; border:3px solid var(--ink); background:#67b953; box-shadow:0 6px 0 var(--ink)}
 canvas{display:block; width:100%; height:auto; aspect-ratio:1280/720; cursor:crosshair; touch-action:manipulation}
 /* tela cheia (tecla F): o jogo ocupa a tela toda, sem distorcer */
+/* TELA_DO_JOGO: o jogo ocupa a janela inteira (sem título em cima e sem painéis embaixo).
+   F2 mostra/esconde os painéis de teste (ou abra o site com ?dev=1). */
+html.tela-jogo, html.tela-jogo body{margin:0; height:100%; overflow:hidden; background:#07060b}
+html.tela-jogo .wrap{max-width:none; padding:0; height:100vh; display:grid; place-items:center}
+html.tela-jogo .topo, html.tela-jogo .painel{display:none}
+html.tela-jogo .palco{border:0; border-radius:0; box-shadow:none; background:#07060b;
+  width:min(100vw, calc(100vh * 16 / 9)); height:min(100vh, calc(100vw * 9 / 16))}
+html.tela-jogo .palco canvas{width:100%; height:100%; display:block}
+html.tela-jogo .palco:fullscreen{width:100vw; height:100vh}
+html.tela-jogo .palco:fullscreen canvas{width:min(100vw, calc(100vh * 16 / 9)); height:auto}
+.botoes-jogo{position:absolute; top:10px; right:10px; z-index:6; display:flex; gap:8px}
+.botoes-jogo button{width:42px; height:42px; border-radius:50%; border:0; cursor:pointer; display:grid; place-items:center; font-size:20px; line-height:1;
+  color:#2a1804; background:linear-gradient(180deg,#ffe58a,#d8921a); box-shadow:0 0 0 2px #1a1208, 0 4px 10px rgba(0,0,0,.45); opacity:.85; transition:opacity .15s, transform .15s}
+.botoes-jogo button:hover{opacity:1; transform:scale(1.08)}
 .palco:fullscreen{border:0; border-radius:0; box-shadow:none; background:#0f0b14; width:100vw; height:100vh; display:flex; align-items:center; justify-content:center}
 .palco:fullscreen canvas{width:min(100vw, calc(100vh * 1280 / 720)); height:auto}
 .buffer{
@@ -445,6 +459,9 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 </style>
 </head>
 <body>
+<script>/* TELA_DO_JOGO: começa ocupando a janela toda; com ?dev=1 ou F2 aparecem os painéis de teste */
+  try { if (!/[?&]dev=1/.test(location.search) && localStorage.getItem("hvm_dev") !== "1") document.documentElement.classList.add("tela-jogo"); } catch { document.documentElement.classList.add("tela-jogo"); }
+</script>
 <!-- ================= INTRO (carregamento, escolha do lado e menu) =================
      Os textos e botões ficam aqui; as animações ficam em public/intro.js. -->
 <div class="intro" id="intro">
@@ -610,6 +627,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
   <div class="palco">
     <canvas id="jogo" aria-label="Campo de batalha com 5 linhas (A a E) e 9 colunas"></canvas>
     <div class="buffer" id="buffer"></div>
+    <div class="botoes-jogo"><button id="jgTela" title="Tela cheia (F)">⛶</button><button id="jgMenu" title="Menu">☰</button></div>
     <video class="videoFim" id="videoFim" playsinline preload="auto"></video>
     <div class="fim" id="fim">
       <div>

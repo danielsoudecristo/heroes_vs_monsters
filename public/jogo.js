@@ -5139,6 +5139,15 @@ $("btnRecomecar").addEventListener("click", recomecar);
 $("btnRecomecar2").addEventListener("click", recomecar);
 // botão "Menu": para o jogo e abre o menu (lá tem "Continuar")
 if ($("btnMenu")) $("btnMenu").addEventListener("click", () => { if (window.INTRO_ABRIR_MENU) window.INTRO_ABRIR_MENU(); });
+// TELA_DO_JOGO: botões redondos em cima à direita (menu e tela cheia) e F2 para os painéis de teste
+if ($("jgMenu")) $("jgMenu").addEventListener("click", () => { if (window.INTRO_ABRIR_MENU) window.INTRO_ABRIR_MENU(); });
+if ($("jgTela")) $("jgTela").addEventListener("click", () => alternarTelaCheia());
+addEventListener("keydown", e => {
+  if (e.key !== "F2") return;
+  const dev = document.documentElement.classList.toggle("tela-jogo") === false;
+  try { localStorage.setItem("hvm_dev", dev ? "1" : "0"); } catch {}
+  requestAnimationFrame(ajustarResolucao); e.preventDefault();
+});
 cv.addEventListener("click", e => {
   const b = cv.getBoundingClientRect();
   const x = (e.clientX - b.left) * W / b.width, y = (e.clientY - b.top) * H / b.height;
