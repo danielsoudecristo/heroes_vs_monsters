@@ -44,4 +44,7 @@
     </application>
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- ATUALIZADOR: deixa o jogo instalar a versão nova que ele baixou.
+         LOJA_PLAY: na versão da Play Store, APAGUE esta linha (a Play Store não aceita). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

@@ -940,13 +940,23 @@ async function pedirAmizade(id, botao) {
 window.addEventListener("conta", () => { ficarOnline(); carregarAmigos(); });
 
 /* ---------- PROCURAR PARTIDA ONLINE (fila do servidor, até 15 s; depois joga contra o bot) ---------- */
-const BUSCA = { espera: 15, cada: 1500 };
+/* BUSCA_PVP: procura uma pessoa por "espera" segundos. Se ninguém aparecer, a partida começa sozinha
+   contra o bot (com um nome de jogador), para ninguém ficar esperando. */
+const BUSCA = { espera: 10, cada: 1500 };
+const NOMES_ADVERSARIO = ["Lucas", "Gabriel", "Rafa", "Bia", "Pedro", "Júlia", "Davi", "Mateus", "Ana", "Enzo", "Lara", "Theo",
+  "Guilherme", "Sofia", "Caio", "Nina", "Arthur", "Malu", "Bruno", "Lívia", "Igor", "Yasmin", "Vitor", "Duda"];
+const SOBRENOMES_ADVERSARIO = ["", "", "_BR", "Gamer", "Pro", "XD", "07", "99", "_GG", "Rei", "TV", "2010"];
+function nomeAdversario() {
+  const n = NOMES_ADVERSARIO[Math.floor(Math.random() * NOMES_ADVERSARIO.length)];
+  const s = SOBRENOMES_ADVERSARIO[Math.floor(Math.random() * SOBRENOMES_ADVERSARIO.length)];
+  return n + s + (Math.random() < .35 ? Math.floor(Math.random() * 90 + 10) : "");
+}
 let busca = null;
 async function procurarPartida() {
   const nomeLado = l => (l === "heroes" ? "Heroes" : "Monsters");
   $("buscaTitulo").textContent = "Procurando adversário...";
   $("buscaTxt").textContent = `Você joga de ${nomeLado(ladoMenu)}. Procurando alguém de ${nomeLado(ladoMenu === "heroes" ? "monsters" : "heroes")}...`;
-  $("buscaBot").textContent = "Jogar sem PvP agora";
+  $("buscaBot").hidden = true;                                   // (sem "Jogar sem PvP": se ninguém aparecer, começa sozinho)
   $("buscaCancelar").textContent = "Cancelar";
   abrirJanela("janelaBusca");
   const minha = busca = { inicio: performance.now(), ativa: true };
@@ -958,10 +968,14 @@ async function procurarPartida() {
   const terminar = () => { minha.ativa = false; clearInterval(relogio); };
   const jogarBot = async () => {
     terminar(); try { await window.CONTA.rpc("sair_da_fila"); } catch {}
-    fecharJanela(); fecharIntro(); window.JOGO.iniciarPvp(ladoMenu);
+    const nome = nomeAdversario(), outro = ladoMenu === "heroes" ? "monsters" : "heroes";
+    $("buscaTitulo").textContent = "Adversário encontrado!";
+    $("buscaTxt").textContent = `${nome} vai jogar de ${nomeLado(outro)}. Boa sorte!`;
+    somTrovao();
+    await new Promise(ok => setTimeout(ok, 1500));
+    fecharJanela(); fecharIntro(); window.JOGO.iniciarPvp(ladoMenu, nome);
   };
   $("buscaCancelar").onclick = async () => { terminar(); try { await window.CONTA.rpc("sair_da_fila"); } catch {} fecharJanela(); };
-  $("buscaBot").onclick = () => jogarBot();
   const niveis = window.PERFIL && PERFIL.niveisConta ? PERFIL.niveisConta() : {};
   while (minha.ativa) {
     let sala = null;
@@ -980,16 +994,7 @@ async function procurarPartida() {
       catch (e) { alert("Não deu para entrar na partida: " + (e.message || e)); window.JOGO.iniciarPvp(ladoMenu); }
       return;
     }
-    if ((performance.now() - minha.inicio) / 1000 >= BUSCA.espera) {    // ninguém apareceu: a pessoa escolhe
-      terminar(); try { await window.CONTA.rpc("sair_da_fila"); } catch {}
-      $("buscaTitulo").textContent = "Ninguém apareceu agora";
-      $("buscaTxt").textContent = "Tente procurar de novo daqui a pouco, ou jogue sem PvP enquanto isso.";
-      $("buscaTempo").textContent = "😕"; roda.style.setProperty("--p", "100%");
-      $("buscaCancelar").textContent = "Procurar de novo";
-      $("buscaCancelar").onclick = () => { somClique(true); procurarPartida(); };
-      $("buscaBot").textContent = "Jogar sem PvP";
-      return;
-    }
+    if ((performance.now() - minha.inicio) / 1000 >= BUSCA.espera) { jogarBot(); return; }   // ninguém apareceu: começa sozinha
     await new Promise(ok => setTimeout(ok, BUSCA.cada));
   }
 }

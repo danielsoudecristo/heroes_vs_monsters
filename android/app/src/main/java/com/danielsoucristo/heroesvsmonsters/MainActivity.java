@@ -14,6 +14,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(AtualizadorPlugin.class);   // ATUALIZADOR: baixa e instala a versão nova dentro do jogo
         super.onCreate(savedInstanceState);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);   // sempre deitado
         esconderBarras();

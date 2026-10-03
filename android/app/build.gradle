@@ -7,7 +7,13 @@ android {
         applicationId "com.danielsoucristo.heroesvsmonsters"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+<<<<<<< HEAD
         versionCode 2
+=======
+        // VERSAO_APP: a cada APK novo, SOME 1 no versionCode (2, 3, 4...) e mude o versionName ("1.1", "1.2"...).
+        // O jogo compara o versionCode com a "versao_minima" do Supabase (tabela config_app).
+        versionCode 1
+>>>>>>> 169b658 (descrição da mudança)
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

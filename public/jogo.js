@@ -363,6 +363,12 @@ const PERSONAGENS = {
         fps: 11,          // casado com a velocidade: o pé apoiado acompanha o chão (11 x 2,76 = 30)
         olhaDireita: true
       },
+      // TITA_PARADO: parado respirando em guarda (no cerco, esperando a hora de socar o chão; e no preparo)
+      parado: {
+        src: "Esqueleto Tita/parado/parado.png",
+        cols: 5, quadros: 20, cw: 190, ch: 216, ax: 95, ay: 212, fps: 10,
+        olhaDireita: true, opcional: true
+      },
       // quando você mandar as outras folhas, é só colocar nestas pastas (o jogo já procura por elas):
       socar: {            // 2º PNG: soca o chão duas vezes (cada soco solta uma onda de ossos) — 151 quadros
         src: "Esqueleto Tita/socando no chao/socando_no_chao.png",
@@ -1132,8 +1138,7 @@ const CAMPANHA = {
   niveis: 100,                                   // vence quem passar do nível 100
   // dia e noite: 2 níveis de dia, 2 de noite, e assim por diante (de noite não cai energia do céu)
   ehNoite: n => Math.floor((n - 1) / 2) % 2 === 1,
-  ondas: n => Math.min(6, 2 + Math.floor(n / 12)),                 // 2 ondas no começo, até 6 no fim
-  quantidade: (n, onda) => Math.min(28, 3 + Math.floor(n * .45) + onda * 2),   // monstros por onda
+  ondas: n => faseDoNivel(n).ondas.length,                         // quantas ondas tem o nível (veja FASES_CAMPANHA)
   intervalo: n => Math.max(1.1, 3.8 - n * .03),                     // segundos entre um monstro e o próximo
   preparo: 20,                                   // segundos para montar a defesa antes da 1ª onda de cada nível
   pausaEntreOndas: 8,
@@ -1142,8 +1147,56 @@ const CAMPANHA = {
   // a partir de qual nível cada monstro começa a aparecer nas ondas
   entraNoNivel: { esqueleto: 1, esqueletoArqueiro: 3, esqueletoFogo: 5, esqueletoProtetor: 8, esqueletoMago: 12 },
   chefao: "esqueletoTita",
-  nivelExtraChefao: 3                            // o chefão vem alguns níveis acima dos outros monstros
+  nivelExtraChefao: 3,                           // o chefão vem alguns níveis acima dos outros monstros
+  estrelas: { tres: 80, duas: 45 },              // ESTRELAS: vida do castelo no fim do nível para ganhar 3 / 2 estrelas
+  moedasPorEstrela: 5                            // moedas a mais por estrela
 };
+/* FASES_CAMPANHA: cada nível tem um nome, uma dica e as ondas com QUANTOS de cada monstro vêm.
+   e = Esqueleto · a = Esq. Arqueiro · f = Esq. de Fogo · p = Esq. Protetor · m = Esq. Mago · chefes = quantos Titãs no fim.
+   Depois do último nível desta lista, os níveis são montados sozinhos, cada vez com mais monstros. */
+const FASES_CAMPANHA = [
+  { nome: "Primeiros Passos",   dica: "Coloque a Elara logo no começo: ela gera energia.", ondas: [{ e: 3 }, { e: 4 }] },
+  { nome: "Patrulha de Ossos",  dica: "Junte energia antes da segunda onda.", ondas: [{ e: 4 }, { e: 6 }] },
+  { nome: "Chuva de Flechas",   dica: "Arqueiros param no 2º quadrado e atiram no castelo: derrube-os!", ondas: [{ e: 4, a: 1 }, { e: 5, a: 2 }] },
+  { nome: "Marcha Sombria",     dica: "Três ondas: guarde energia entre elas.", ondas: [{ e: 6, a: 1 }, { e: 7, a: 2 }, { e: 6, a: 2 }] },
+  { nome: "O Primeiro Titã",    dica: "No fim vem o chefão! Ele soca o chão e a onda de ossos acerta a linha toda.", ondas: [{ e: 6, a: 2 }, { e: 8, a: 2 }], chefes: 1 },
+  { nome: "Fogo no Campo",      dica: "O Esqueleto de Fogo corre mais: tenha defesa nas linhas.", ondas: [{ e: 5, f: 1 }, { e: 6, f: 2, a: 1 }] },
+  { nome: "O Cerco",            dica: "Muitos arqueiros! Magos acertam vários de uma vez.", ondas: [{ e: 6, a: 3 }, { e: 6, f: 2, a: 2 }, { e: 8, a: 3 }] },
+  { nome: "Muralha de Escudos", dica: "O Protetor bloqueia golpes: use magia e a onda de terra.", ondas: [{ e: 6, p: 1 }, { e: 6, p: 2, a: 2 }, { e: 8, p: 2, f: 2 }] },
+  { nome: "A Grande Horda",     dica: "Uma enxurrada de esqueletos: espalhe guerreiros nas 5 linhas.", ondas: [{ e: 12 }, { e: 10, a: 3, f: 2 }, { e: 12, p: 2, a: 3 }] },
+  { nome: "Rei dos Ossos",      dica: "Chefão de novo, agora mais forte!", ondas: [{ e: 8, a: 3, f: 2 }, { e: 10, p: 2, a: 3, f: 2 }], chefes: 1 },
+  { nome: "Feitiçaria",         dica: "O Esqueleto Mago invoca esqueletos: derrote-o e todos somem.", ondas: [{ e: 6, m: 1 }, { e: 8, a: 2, m: 1 }, { e: 8, p: 2, f: 2 }] },
+  { nome: "Noite Sem Fim",      dica: "De noite não cai energia: confie na Elara.", ondas: [{ e: 10, a: 3 }, { e: 8, f: 3, m: 1 }, { e: 10, p: 3, a: 3 }] },
+  { nome: "Paredão",            dica: "Protetores na frente, arqueiros atrás.", ondas: [{ e: 6, p: 4 }, { p: 4, a: 4 }, { p: 5, f: 3, m: 1 }] },
+  { nome: "Inferno",            dica: "Fogo em todas as linhas!", ondas: [{ e: 6, f: 6 }, { f: 6, a: 4 }, { f: 8, p: 2, m: 1 }] },
+  { nome: "Dois Titãs",         dica: "Agora são DOIS chefões. Boa sorte, comandante!", ondas: [{ e: 10, a: 4, f: 3 }, { e: 10, p: 3, m: 2 }], chefes: 2 }
+];
+const NOMES_FASES = ["Vale dos Mortos", "Lua de Sangue", "Cripta Antiga", "Fúria dos Ossos", "Exército da Noite", "Tempestade de Flechas",
+  "Portões do Abismo", "Névoa Maldita", "Marcha Final", "Coroa de Ossos"];
+const LETRA_MONSTRO = { e: "esqueleto", a: "esqueletoArqueiro", f: "esqueletoFogo", p: "esqueletoProtetor", m: "esqueletoMago" };
+function faseDoNivel(n) {
+  if (n <= FASES_CAMPANHA.length) return FASES_CAMPANHA[n - 1];
+  // níveis automáticos: mais ondas, mais monstros e mais tipos fortes a cada nível
+  const nOndas = Math.min(6, 3 + Math.floor((n - FASES_CAMPANHA.length) / 10)), ondas = [];
+  for (let w = 0; w < nOndas; w++) {
+    const qtd = Math.min(32, Math.round(8 + n * .45 + w * 2)), o = {};
+    const forte = Math.min(.55, .2 + n * .006);                   // parte dos monstros que são dos tipos fortes
+    o.e = Math.round(qtd * (1 - forte));
+    const fortes = ["a", "f", "p", "m"], resto = qtd - o.e;
+    for (let k = 0; k < resto; k++) { const l = fortes[(k + w + n) % fortes.length]; o[l] = (o[l] || 0) + 1; }
+    ondas.push(o);
+  }
+  return { nome: NOMES_FASES[(n - FASES_CAMPANHA.length - 1) % NOMES_FASES.length] + " " + n, dica: "Cada vez mais forte: evolua seus guerreiros!",
+           ondas, chefes: n % 5 === 0 ? 1 + Math.floor(n / 30) : 0 };
+}
+function totalInimigos(n) { const f = faseDoNivel(n); return f.ondas.reduce((a, o) => a + Object.values(o).reduce((x, y) => x + y, 0), 0) + (f.chefes || 0); }
+function bannerNivel(n) {                         // NÍVEL n · nome da fase, dica e quantos inimigos vêm
+  const f = faseDoNivel(n), noite = CAMPANHA.ehNoite(n);
+  let rec = 0; try { rec = Number(localStorage.getItem("hvm_recorde_campanha")) || 0; } catch {}
+  mostrarBanner(`NÍVEL ${n} · ${f.nome}`, `${noite ? "🌙" : "☀️"} ${totalInimigos(n)} inimigos${f.chefes ? ` · ⚠ ${f.chefes > 1 ? f.chefes + " chefões" : "chefão"}` : ""} · ${modoM ? "Os heróis estão chegando: monte sua defesa!" : f.dica}` +
+    (rec > n ? ` · Seu recorde: nível ${rec}` : ""), 4.2);
+}
+function estrelasDoNivel() { const E = CAMPANHA.estrelas; return vida >= E.tres ? 3 : vida >= E.duas ? 2 : 1; }
 /* NÍVEIS DOS PERSONAGENS (1 a 100), iguais para os dois lados: cada nível dá +4,5% de vida e de dano.
    Nível 10 ≈ 1,4x · nível 50 ≈ 3,2x · nível 100 ≈ 5,5x.
    Guerreiros: sobem de nível com experiência (cada guerreiro vivo no fim de um nível dá 1 ponto ao tipo dele)
@@ -1217,12 +1270,12 @@ function novoEstado() {
   vida = 100; pausado = false; ondaT = 10; ondaN = 0; tremor = 0; tempo = 0;
   if (typeof novaSemente === "function") novaSemente();             // SORTE: semente nova a cada partida
   buffer = ""; fim = false; abatidas = 0; nucleoDor = 0;
-  camp = { nivel: 1, onda: 0, fase: "inicio", t: 3, fila: [], spawnT: 0, chefe: null };
+  camp = { nivel: 1, onda: 0, fase: "inicio", t: 3, fila: [], spawnT: 0, chefe: null, chefes: [] };
   banner = null; vidaLag = 100; pendentes = []; pendenteSel = null;
   camp.fase = "preparo"; camp.t = CAMPANHA.preparo;
   for (const id in GUERREIROS) { nivelG[id] = 1; xpG[id] = 0; }
   setTimeout(() => definirNoite(CAMPANHA.ehNoite(1)), 0);   // depois que tudo carregou
-  mostrarBanner("NÍVEL 1", `${CAMPANHA.ehNoite(1) ? "🌙 Noite" : "☀️ Dia"} · monte sua defesa!`);
+  bannerNivel(1);
   recargaM = {}; vidaInimigo = 100; nucleoDorInimigo = 0;
   energia = ENERGIA_INICIAL; energiaPulso = 0; energiaFalha = 0; orbes = []; ceuT = 4;
   cartas = Object.keys(GUERREIROS).map(id => ({
@@ -1476,16 +1529,11 @@ function atualizarPendentes(dt) {
 
 /* ---------- Campanha: níveis, ondas, chefão, vitória ---------- */
 function mostrarBanner(titulo, sub, dur = 3.2, cor = "#ffd97a") { banner = { titulo, sub, t: 0, dur, cor }; }
-function montarOnda() {
-  const n = camp.nivel, disp = Object.keys(CAMPANHA.entraNoNivel).filter(id => CAMPANHA.entraNoNivel[id] <= n && PERSONAGENS[id]);
-  const qtd = CAMPANHA.quantidade(n, camp.onda);
+function montarOnda() {                                  // FASES_CAMPANHA: a onda tem a quantidade certa de cada monstro
+  const onda = faseDoNivel(camp.nivel).ondas[camp.onda - 1] || { e: 4 };
   camp.fila = [];
-  for (let i = 0; i < qtd; i++) {
-    // os mais fortes aparecem menos: o esqueleto comum sempre é a maioria
-    const peso = disp.map(id => id === "esqueleto" ? 3 : 1), tot = peso.reduce((a, b) => a + b, 0);
-    let r = sorte() * tot, k = 0; while (r > peso[k]) { r -= peso[k]; k++; }
-    camp.fila.push(disp[k]);
-  }
+  for (const l in onda) for (let i = 0; i < onda[l]; i++) camp.fila.push(LETRA_MONSTRO[l] || "esqueleto");
+  for (let i = camp.fila.length - 1; i > 0; i--) { const j = Math.floor(sorte() * (i + 1)); [camp.fila[i], camp.fila[j]] = [camp.fila[j], camp.fila[i]]; }   // embaralha
   camp.spawnT = 1;
 }
 function soltarDaCampanha(tipo, extraNivel = 0) {
@@ -1549,20 +1597,24 @@ function encerrarNivel() {
   return { devolvida, subiram };
 }
 // MOEDAS: cada nível da campanha concluído dá moedas da conta (PERFIL.ECONOMIA no perfil.js)
-function premioNivel(comChefe) {
+function premioNivel(comChefe, estrelas = 0) {
   if (!window.PERFIL) return 0;
-  const E = PERFIL.ECONOMIA, n = E.campanhaNivel + (comChefe ? E.campanhaChefe : 0);
+  const E = PERFIL.ECONOMIA, n = E.campanhaNivel + (comChefe ? E.campanhaChefe : 0) + estrelas * CAMPANHA.moedasPorEstrela;
   const r = PERFIL.ganharMoedas(n, modoM ? "monsters" : "heroes");   // lado em alta: +50%; os dois lados no dia: +150
   return r.ganho + (r.alta ? " (lado em alta!)" : "") + (r.duplo ? ` · bônus dos dois lados +${r.duplo}` : "");
 }
-function concluirNivel(porCastelo) {
+function concluirNivel(porCastelo, comChefe) {
   const n = camp.nivel;
   if (n >= CAMPANHA.niveis) { vitoria(); return; }
+  const est = estrelasDoNivel();                                   // ESTRELAS: pela vida que sobrou no castelo
   const res = encerrarNivel();
-  camp.fase = "nivelOk"; camp.t = CAMPANHA.pausaEntreNiveis; camp.fila = []; camp.chefe = null;
+  camp.fase = "nivelOk"; camp.t = CAMPANHA.pausaEntreNiveis; camp.fila = []; camp.chefe = null; camp.chefes = [];
+  let recorde = false;
+  try { if (n + 1 > (Number(localStorage.getItem("hvm_recorde_campanha")) || 0)) { localStorage.setItem("hvm_recorde_campanha", String(n + 1)); recorde = n > 1; } } catch {}
   const txtEnergia = res.devolvida ? `🎁 +${res.devolvida} de energia dos presentes` : "Pegue energia para montar a defesa";
-  const ganho = premioNivel(porCastelo);
-  mostrarBanner(porCastelo ? "CASTELO INIMIGO DERRUBADO!" : `NÍVEL ${n} CONCLUÍDO!`, `🪙 +${ganho} moedas · ${txtEnergia}${res.subiram.length ? " · ⬆ " + res.subiram.join(", ") : ""}`, 4, "#8ff0a4");
+  const ganho = premioNivel(porCastelo || comChefe, est);
+  mostrarBanner(`${"★".repeat(est)}${"☆".repeat(3 - est)}  ${porCastelo ? "CASTELO DERRUBADO!" : `NÍVEL ${n} CONCLUÍDO!`}`,
+    `🪙 +${ganho} moedas${recorde ? " · 🏆 Novo recorde!" : ""} · ${txtEnergia}${res.subiram.length ? " · ⬆ " + res.subiram.join(", ") : ""}`, 4, "#8ff0a4");
   tocar(SONS_JOGO.proximoNivel.som, SONS_JOGO.proximoNivel.volume, 0, 0);
 }
 function atualizarCampanha(dt) {
@@ -1579,7 +1631,11 @@ function atualizarCampanha(dt) {
       if (camp.spawnT <= 0 && camp.fila.length) { soltarDaCampanha(camp.fila.shift()); camp.spawnT = CAMPANHA.intervalo(n) * rand(.75, 1.25); }
       if (!camp.fila.length && monstrosVivos() === 0) {
         if (camp.onda < total) { camp.fase = "pausa"; camp.t = CAMPANHA.pausaEntreOndas; mostrarBanner(`ONDA ${camp.onda + 1} DE ${total}`, "Prepare seus guerreiros!", 2.6); }
-        else { camp.fase = "chefePrep"; camp.t = 4; mostrarBanner("⚠ CHEFÃO ⚠", "O Esqueleto Titã se aproxima...", 3.4, "#ff6b5e"); if (!reduzMov) tremor = Math.max(tremor, .3); }
+        else if (faseDoNivel(n).chefes) {
+          const k = faseDoNivel(n).chefes;
+          camp.fase = "chefePrep"; camp.t = 4; mostrarBanner(k > 1 ? `⚠ ${k} CHEFÕES ⚠` : "⚠ CHEFÃO ⚠", k > 1 ? "Os Titãs estão chegando..." : "O Esqueleto Titã se aproxima...", 3.4, "#ff6b5e");
+          if (!reduzMov) tremor = Math.max(tremor, .3);
+        } else concluirNivel(false, false);                           // nível sem chefão: acabou
       }
       break;
     case "pausa":
@@ -1589,30 +1645,30 @@ function atualizarCampanha(dt) {
     case "chefePrep":
       camp.t -= dt;
       if (camp.t <= 0) {
-        const c = soltarDaCampanha(CAMPANHA.chefao, CAMPANHA.nivelExtraChefao);
-        if (c) { c.chefe = true; camp.chefe = c; } else camp.chefe = { morte: 1 };
+        camp.chefes = [];
+        for (let k = 0; k < (faseDoNivel(n).chefes || 1); k++) {
+          const c = soltarDaCampanha(CAMPANHA.chefao, CAMPANHA.nivelExtraChefao);
+          if (c) { c.chefe = true; camp.chefes.push(c); }
+        }
+        camp.chefe = camp.chefes[0] || { morte: 1 };
         camp.fase = "chefe";
       }
       break;
     case "chefe":
       // o nível acaba quando o chefão sai de cena: derrotado OU depois de invadir o castelo (se o castelo aguentou)
-      if (camp.chefe && (camp.chefe.morte || camp.chefe.fora || !(modoM ? plantas : criaturas).includes(camp.chefe)) && monstrosVivos() === 0) {
-        if (n >= CAMPANHA.niveis) { vitoria(); break; }
-        const res = encerrarNivel();
-        camp.fase = "nivelOk"; camp.t = CAMPANHA.pausaEntreNiveis;
-        const txtEnergia = res.devolvida ? `🎁 +${res.devolvida} de energia dos presentes` : "Pegue energia para montar a defesa";
-        const ganho = premioNivel(true);
-        mostrarBanner(`NÍVEL ${n} CONCLUÍDO!`, `🪙 +${ganho} moedas · ${txtEnergia}${res.subiram.length ? " · ⬆ " + res.subiram.join(", ") : ""}`, 4, "#8ff0a4");
-        tocar(SONS_JOGO.proximoNivel.som, SONS_JOGO.proximoNivel.volume, 0, 0);   // som de próximo nível
+      {
+        const lista = modoM ? plantas : criaturas, fora = c => c.morte || c.fora || !lista.includes(c);
+        const vivo = (camp.chefes || []).find(c => !fora(c));
+        if (vivo) camp.chefe = vivo;                                   // a barra do topo mostra o chefão que ainda está vivo
+        if (!vivo && monstrosVivos() === 0) concluirNivel(false, true);
       }
       break;
     case "nivelOk":
       camp.t -= dt;
       if (camp.t <= 0) {
-        camp.nivel++; camp.onda = 0; camp.fase = "preparo"; camp.t = CAMPANHA.preparo; camp.chefe = null;
-        const noite = CAMPANHA.ehNoite(camp.nivel);
-        definirNoite(noite);
-        mostrarBanner(`NÍVEL ${camp.nivel}`, `${noite ? "🌙 Noite: sem energia do céu" : "☀️ Dia"} · monstros nível ~${nivelDosMonstros()} · monte sua defesa!`, 3.6);
+        camp.nivel++; camp.onda = 0; camp.fase = "preparo"; camp.t = CAMPANHA.preparo; camp.chefe = null; camp.chefes = [];
+        definirNoite(CAMPANHA.ehNoite(camp.nivel));
+        bannerNivel(camp.nivel);
       }
       break;
   }
@@ -3633,7 +3689,8 @@ function desenharCriaturaSprite(c) {
   const temAtaque = per.anims.atacar && per.anims.atacar.ok;
   const necroParado = per.necro && c.plantado && !c.atirando && !c.morte;
   const titaAnim = per.tita && c.acao && per.anims[c.acao] && per.anims[c.acao].ok ? per.anims[c.acao] : null;
-  const anim = titaAnim || (necroParado && per.anims.parado && per.anims.parado.ok ? per.anims.parado
+  const titaParado = per.tita && !titaAnim && c.fixo && !c.morte && c.estado !== "atacar" && per.anims.parado && per.anims.parado.ok;   // TITA_PARADO
+  const anim = titaAnim || ((necroParado || titaParado) && per.anims.parado && per.anims.parado.ok ? per.anims.parado
     : c.estado === "atacar" && temAtaque ? per.anims.atacar : per.anims.andar);
   let quadro = Math.floor(c.tAnim * anim.fps) % anim.quadros;
   if (titaAnim) quadro = Math.min(anim.quadros - 1, Math.floor(c.tA * anim.fps));
@@ -3678,7 +3735,7 @@ function desenharCriaturaSprite(c) {
   const esc = per.escala * (anim.escala ?? 1);                            // cada animação pode ter sua própria escala
   const paradoM = c.fixo && !c.morte && c.estado !== "atacar" && !c.acao && !c.atirando && !necroParado;   // MODO_MONSTERS: parado na casa
   const resp = necroParado && anim !== per.anims.parado ? 1 + Math.sin(tempo * 2.4 + c.fase) * .012
-    : paradoM ? 1 + Math.sin(tempo * 2.2 + c.fase) * MODO_MONSTERS.respirar : 1;   // a folha "parado" já respira sozinha
+    : paradoM && anim !== per.anims.parado ? 1 + Math.sin(tempo * 2.2 + c.fase) * MODO_MONSTERS.respirar : 1;   // a folha "parado" já respira sozinha
   ctx.scale(anim.olhaDireita ? -esc : esc, esc * resp * amassa);      // a folha olha para a direita; o jogo anda para a esquerda
   ctx.imageSmoothingQuality = "high";                                      // reduz folhas grandes sem serrilhar
   desenharComDesgaste(anim.img, qx, qy, anim.cw, anim.ch, -anim.ax, -anim.ay, c, anim.ax, anim.ay, true);   // esqueleto: rachaduras
@@ -5889,7 +5946,8 @@ window.JOGO = {
   sprites: () => ({ G: GUERREIROS, P: PERSONAGENS }),   // a batalha do menu (intro.js) usa as mesmas folhas
   comecarOnline,                           // ONLINE: começa a partida contra uma pessoa (o menu chama)
   sairDoOnline,
-  iniciarPvp(lado) {                       // "Batalha PvP": você contra o bot (na Parte B: contra uma pessoa)
+  iniciarPvp(lado, adversario) {           // "Batalha PvP": você contra o bot (adversario = nome mostrado na partida)
+    adversarioPvp = adversario || null;
     this.iniciar(lado, true);
   },
   iniciar(lado, comPvp) {                  // "Novo jogo": começa a campanha do zero
@@ -6092,6 +6150,7 @@ function salvarNivelBot(n) { try { localStorage.setItem("hvm_bot_nivel", String(
 function forcaBot() { return pvp && pvp.botNivel ? (pvp.botNivel - 1) / (BOT_DIFICULDADE.maximo - 1) : 0; }   // 0 = fácil, 1 = máximo
 function mistura(a, b, k) { return a + (b - a) * k; }
 var pvp = null, energiaM = 0;
+var adversarioPvp = null;                               // ADVERSARIO_PVP: nome mostrado quando a busca cai no bot
 function simM() { return pvp ? false : modoM; }        // como a partida funciona por dentro (no PvP: sempre igual)
 function energiaVista() {                              // a energia que aparece para você
   let e = pvp && modoM ? energiaM : energia;
@@ -6149,8 +6208,9 @@ function comecarPvp(lado) {
     const extra = (pvp.botNivel - 1) * BOT_DIFICULDADE.energiaInicialPorNivel;
     if (ladoBot() === "monsters") energiaM += extra; else energia += extra;
   }
+  if (!rede && adversarioPvp) pvp.adversario = adversarioPvp;
   mostrarBanner("PREPARE SUA ARENA", `Pegue a energia que cai do céu e coloque suas tropas: a batalha começa em ${PVP.preparo} s` +
-    (pvp.botNivel ? ` · Bot nível ${pvp.botNivel}` : ""), 4);
+    (pvp.adversario ? ` · Contra ${pvp.adversario}` : pvp.botNivel ? ` · Bot nível ${pvp.botNivel}` : ""), 4);
 }
 function ladoBot() { return pvp.ladoLocal === "heroes" ? "monsters" : "heroes"; }
 function ladoQueJoga() { return pvp ? pvp.ladoLocal : (modoM ? "monsters" : "heroes"); }
@@ -6242,7 +6302,7 @@ function encerrarPvp(vencedor) {
   $("fimTitulo").textContent = venceu ? "VITÓRIA!" : empate ? "EMPATE" : "DERROTA";
   $("fimTxt").textContent = `Seu castelo: ${Math.ceil(minha)} · Castelo inimigo: ${Math.ceil(deles)} · Você derrotou ${meus} e perdeu ${delesK}.` +
     (ganho ? ` 🪙 +${ganho} moedas.` : "") +
-    (pvp.botNivelNovo && pvp.botNivelNovo !== pvp.botNivel ? (pvp.botNivelNovo > pvp.botNivel ? ` O bot subiu para o nível ${pvp.botNivelNovo}!` : ` O bot voltou para o nível ${pvp.botNivelNovo}.`) : "");
+    (!pvp.adversario && pvp.botNivelNovo && pvp.botNivelNovo !== pvp.botNivel ? (pvp.botNivelNovo > pvp.botNivel ? ` O bot subiu para o nível ${pvp.botNivelNovo}!` : ` O bot voltou para o nível ${pvp.botNivelNovo}.`) : "");
   $("fim").classList.toggle("venceu", venceu); $("fim").classList.add("on");
   if (venceu) tocar(SONS_JOGO.proximoNivel.som, SONS_JOGO.proximoNivel.volume, 0, 0);
   else if (!empate) somPersonagem(CASTELO, "caiu", 1, 0, 0);

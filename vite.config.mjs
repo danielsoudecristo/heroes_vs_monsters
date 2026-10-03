@@ -4,6 +4,7 @@
 import { defineConfig } from "vite";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 
 const ARQUIVO = path.resolve("public/assets/ajustes.json");
 
@@ -17,8 +18,37 @@ function mudancas(antes, depois, prefixo = "") {          // lista o que mudou e
   return linhas;
 }
 
+/* VERSAO_WEB: no "npm run build", cria dist/versao-web.json com a lista de TODOS os arquivos do jogo
+   (um código de cada arquivo + tamanho). O app compara com o que ele tem e baixa do site SÓ o que mudou.
+   "versao" = data e hora do build (sempre sobe sozinha, você não precisa mudar número nenhum).
+   "apk" = versionCode do android/app/build.gradle: app com APK mais velho que isso espera atualizar o APK. */
+function versaoWeb() {
+  let saida = path.resolve("dist");
+  return {
+    name: "versao-web",
+    apply: "build",
+    configResolved(c) { saida = path.resolve(c.root, c.build.outDir); },
+    closeBundle() {
+      const arquivos = {};
+      const andar = (pasta, rel) => {
+        for (const nome of fs.readdirSync(pasta)) {
+          const p = path.join(pasta, nome), r = rel ? rel + "/" + nome : nome, st = fs.statSync(p);
+          if (st.isDirectory()) andar(p, r);
+          else if (r !== "versao-web.json") arquivos[r] = { h: crypto.createHash("sha1").update(fs.readFileSync(p)).digest("hex").slice(0, 16), t: st.size };
+        }
+      };
+      andar(saida, "");
+      let apk = 0;
+      try { const m = fs.readFileSync(path.resolve("android/app/build.gradle"), "utf8").match(/versionCode\s+(\d+)/); if (m) apk = Number(m[1]); } catch {}
+      const versao = Math.floor(Date.now() / 1000);
+      fs.writeFileSync(path.join(saida, "versao-web.json"), JSON.stringify({ versao, apk, arquivos }));
+      console.log(`\x1b[35m[versao-web]\x1b[0m ${Object.keys(arquivos).length} arquivos · versão ${versao} · APK mínimo ${apk}`);
+    }
+  };
+}
+
 export default defineConfig({
-  plugins: [{
+  plugins: [versaoWeb(), {
     name: "salvar-ajustes",
     configureServer(server) {
       server.middlewares.use("/salvar-ajustes", (req, res) => {
