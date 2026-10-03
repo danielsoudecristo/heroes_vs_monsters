@@ -2,6 +2,9 @@
 "use strict";
 
 /* ---------- Configuração ---------- */
+// FONTES_CARTOON: letras de desenho animado nos textos desenhados no jogo (mesmas fontes da página)
+const FONTE_CARTOON = "'Lilita One', Grandstander, 'Trebuchet MS', sans-serif";
+const FONTE_TEXTO = "Fredoka, 'Trebuchet MS', sans-serif";
 const W = 1280, H = 720;            // 16:9, a mesma proporção da imagem de fundo e da tela do PC
 const HUD_H = 118;                  // faixa de cima com a barra de cards
 // Grade encaixada na terra da imagem de fundo (Fundo/fundo_do_jogo): começa depois da calçada do castelo
@@ -38,7 +41,8 @@ const PERSONAGENS = {
     gerador: { valor: 25, quadro: 110, x: 0, y: -58 },   // energia que solta, quadro em que ela sai e de onde sai (a partir dos pés)
     anims: {
       // 120 quadros em loop: junta a energia nas mãos e solta no fim do ciclo (~10 s)
-      andar: { src: "Esqueleto Black/energia/energia.png", cols: 8, quadros: 120, cw: 191, ch: 206, ax: 98, ay: 205, fps: 12 }
+      // olhaDireita: a folha olha para a direita; assim ele fica virado para o inimigo (e não para o próprio castelo)
+      andar: { src: "Esqueleto Black/energia/energia.png", cols: 8, quadros: 120, cw: 191, ch: 206, ax: 98, ay: 205, fps: 12, olhaDireita: true }
     }
   },
   esqueleto: {
@@ -2196,13 +2200,18 @@ function atualizarNecro(c, per, dt) {
     }
   }
   c.estado = "atacar";
-  const alvo = plantas.some(p => p.r === c.r && alvoGuerreiro(p) && p.x < c.x);
+  const temGuerreiro = plantas.some(p => p.r === c.r && alvoGuerreiro(p) && p.x < c.x);
+  c.miraCastelo = !temGuerreiro && !ladoB(c.x);              // CERCO: ninguém na frente = a magia vai até o castelo
+  const alvo = temGuerreiro || c.miraCastelo;
   if (c.atirando) {
     c.tTiro += dt;
     const q = Math.floor(c.tTiro * an.fps);
-    if (!c.soltou && q >= an.quadroTiro) { c.soltou = true; magiaInimiga(c, per); c.tirosFeitos++; }
+    if (!c.soltou && q >= an.quadroTiro) {
+      c.soltou = true; magiaInimiga(c, per); c.tirosFeitos++;
+      if (c.miraCastelo) { const s = tiros[tiros.length - 1]; s.castelo = true; s.yChao = c.y; }   // CERCO: segue até o castelo
+    }
     if (q >= an.quadros) {
-      c.atirando = false; c.espera = N.intervalo;
+      c.atirando = false; c.espera = c.miraCastelo ? Math.max(N.intervalo, CERCO.cada) : N.intervalo;
       if (c.tirosFeitos >= N.tirosParaInvocar) { c.tirosFeitos = 0; invocarEsqueletos(c, per); }
     }
   } else if (alvo) {
@@ -2374,16 +2383,18 @@ function atualizar(dt) {
       const cfgP = { ...MODO_MONSTERS.andar.padrao, ...(MODO_MONSTERS.andar[p.tipo] || {}) };
       const frente = criaturas.some(c => c.r === p.r && !c.morte && c.surgir > .3 && ladoB(c.x) === ladoB(p.x) && c.x - p.x > -5 && c.x - p.x < cfgP.para);
       if (p.trocaAndar > 0) p.trocaAndar -= dt;
-      // CERCO (PvP): no 2º quadrado antes do castelo inimigo ele para (o de longe atira; o de perto espera)
-      const xC = xCercoHerois(), noCerco = pvp && ladoB(p.x) && !p.cercoLivre && p.x >= xC - .5;
-      if (noCerco && !frente && !ocupado) {
-        if (CERCO.deLonge.includes(p.tipo)) { p.cercoT = (p.cercoT || 0) + dt; if (p.cercoT >= CERCO.cada) { p.cercoT = 0; atirarNoCastelo(p, "heroes"); } }
-        else { p.cercoEspera = (p.cercoEspera || 0) + dt; if (p.cercoEspera >= CERCO.esperaPerto) p.cercoLivre = true; }
+      // CERCO (PvP): no 2º quadrado antes do castelo inimigo ele para (o de longe ataca o castelo; o de perto fica esperando)
+      const xC = xCercoHerois();
+      const adiante = ladoB(p.x) && criaturas.some(c => c.r === p.r && !c.morte && c.surgir > .3 && ladoB(c.x) && c.x - p.x > -5);   // alguém entre ele e o castelo
+      const noCerco = ladoB(p.x) && !p.cercoLivre && !adiante && p.x >= xC - .5;
+      p.miraCastelo = noCerco && CERCO.deLonge.includes(p.tipo);                      // o de longe mira no castelo (ataque normal dele)
+      if (noCerco && !frente && !ocupado && !p.miraCastelo && CERCO.pertoSegue) {
+        p.cercoEspera = (p.cercoEspera || 0) + dt; if (p.cercoEspera >= CERCO.esperaPerto) p.cercoLivre = true;
       }
       if (!ocupado && !frente && p.vel > 0 && !noCerco) {
         if (!p.andando) p.trocaAndar = TROCA_ANDAR;                                   // começou a andar: troca suave
         p.andando = true; p.x += p.vel * dt;
-        if (pvp && ladoB(p.x) && !p.cercoLivre && p.x > xC) p.x = xC;                 // não passa do 2º quadrado
+        if (ladoB(p.x) && !p.cercoLivre && !adiante && p.x > xC) p.x = xC;     // não passa do 2º quadrado
         p.tAndar += dt * p.vel / ({ ...MODO_MONSTERS.andar.padrao, ...(MODO_MONSTERS.andar[p.tipo] || {}) }).velocidade;   // anda mais rápido = passo mais rápido
         if (!ladoB(p.x) && !p.atravessou) conferirFenda(p, true);                       // PORTAL_TROPA: abre na frente
         if (!ladoB(p.x) && p.x >= PORTAO_X) atravessarPortao(p, MW - PORTAO_X + 6);   // PORTOES
@@ -2406,12 +2417,15 @@ function atualizar(dt) {
       p.atkCd = (p.atkCd ?? 0) - dt;
       const an = g.sprite.anims.atacando, pr = g.sprite.anims.preparando;
       const durPrep = pr && pr.ok ? pr.quadros / pr.fps + (pr.segura ?? 0) : 0;
-      const alvo = alvoNaLinha(p);
+      const alvo = alvoNaLinha(p) || p.miraCastelo;                 // CERCO: o castelo inimigo também é alvo
       if (p.atacando) {
         p.tA += dt;
         const q = Math.floor(p.tA * an.fps);
-        if (!p.atirou && q >= an.quadroTiro) { p.atirou = true; if (g.magia) lancarMagia(p, g); else atirarFlecha(p, g); }
-        if (q >= an.quadros) { p.atacando = false; p.atkCd = g.intervaloAtaque; p.pose = "guarda"; }
+        if (!p.atirou && q >= an.quadroTiro) {
+          p.atirou = true; if (g.magia) lancarMagia(p, g); else atirarFlecha(p, g);
+          if (p.miraCastelo) { const s = tiros[tiros.length - 1]; s.castelo = true; s.yChao = p.y; }   // CERCO: segue até o castelo
+        }
+        if (q >= an.quadros) { p.atacando = false; p.atkCd = p.miraCastelo ? Math.max(g.intervaloAtaque, CERCO.cada) : g.intervaloAtaque; p.pose = "guarda"; }
       } else if (p.pose === "preparando" || p.pose === "voltando") {
         p.tPose += dt;
         if (p.tPose >= durPrep) {
@@ -2482,6 +2496,12 @@ function atualizar(dt) {
         for (let i = 0; i < 14; i++) { const a = rand(0, 7), v = rand(80, 240);
           parts.push({ x: s.x, y: s.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, g: 160, vida: 0, max: rand(.3, .55), tam: rand(1.6, 3.2), cor: P.faiscas[i % 3], tipo: "ponto" }); }
       }
+      if (s.castelo && !s.fora && s.x <= G.left - 20) {          // CERCO: magia do Esqueleto Mago acertou o castelo dos Heroes
+        s.fora = true;
+        explosoes.push({ x: s.x, y: s.y, chaoY: s.yChao, t: 0, dur: .55, tipo: "impacto", raio: 55, estilo: s.estilo, seed: rand(0, 6) });
+        somPersonagem(PERSONAGENS[s.tipoCriatura], "impacto", .6, 60, .06);
+        acertarCasteloCerco("monsters", CERCO.dano, s.yChao);
+      }
       if (s.x < G.left - 30) s.fora = true;
       continue;
     }
@@ -2493,6 +2513,9 @@ function atualizar(dt) {
           x: s.x, y: s.y, vx: rand(-140, 40), vy: rand(-120, 60), g: 200,
           vida: 0, max: rand(.2, .4), tam: rand(2, 4), cor: i % 2 ? "#e8dfc8" : "#8a4b2a", tipo: "ponto"
         });
+      }
+      if (s.castelo && !s.fora && s.x <= G.left - 20) {          // CERCO: flecha do Esqueleto Arqueiro acertou o castelo dos Heroes
+        s.fora = true; acertarCasteloCerco("monsters", CERCO.dano, s.yChao);
       }
       if (s.x < G.left - 30) s.fora = true;
       continue;
@@ -2521,6 +2544,14 @@ function atualizar(dt) {
         break;
       }
     }
+    if (s.castelo && !s.fora && s.x >= PORTAO_INIMIGO) {      // CERCO: flecha/magia do herói acertou o castelo dos Monsters
+      s.fora = true;
+      if (s.tipo === "magia") {
+        explosoes.push({ x: s.x, y: s.y, chaoY: s.yChao, t: 0, dur: s.estilo === "fogo" ? .85 : .6, tipo: "impacto", raio: s.raio || 50, estilo: s.estilo, seed: rand(0, 6) });
+        if (s.dono) somPersonagem(GUERREIROS[s.dono], "impacto", .7, 60, .06);
+      }
+      acertarCasteloCerco("heroes", CERCO.dano, s.yChao);
+    }
     if (s.x > MW + 30) s.fora = true;
   }
   tiros = tiros.filter(s => !s.fora);
@@ -2546,19 +2577,36 @@ function atualizar(dt) {
     }
     c.surgir = Math.min(1, c.surgir + dt / .7);
     if (c.morte) { c.morte += dt; continue; }
-    if (pvp && !ladoB(c.x) && c.atravessou !== false && !c.cercoLivre && c.surgir >= 1) {   // CERCO (PvP): 2º quadrado antes do castelo dos Heroes
+    c.miraCastelo = false;
+    if (!c.dono && !ladoB(c.x) && c.atravessou !== false && !c.cercoLivre && c.surgir >= 1) {   // CERCO: 2º quadrado antes do castelo dos Heroes (invocados não param)
       const xC = xCercoMonstros();
       if (c.x <= xC + .5) {
-        c.x = Math.max(c.x, xC);
         const heroiNaFrente = plantas.some(p => p.r === c.r && !p.morte && !ladoB(p.x) && p.x < c.x + 10);
-        if (heroiNaFrente) { c.cercoLivre = true; c.fixo = false; }                // alguém entrou na frente: luta normal
+        if (heroiNaFrente) { c.avancou = true; c.fixo = false; }                  // alguém na frente (1º quadrado): luta normal
         else {
-          if (CERCO.deLonge.includes(c.tipo)) { c.cercoT = (c.cercoT || 0) + dt; if (c.cercoT >= CERCO.cada) { c.cercoT = 0; atirarNoCastelo(c, "monsters"); } }
-          else { c.cercoEspera = (c.cercoEspera || 0) + dt; if (c.cercoEspera >= CERCO.esperaPerto) c.cercoLivre = true; }
-          c.fixo = !c.cercoLivre;                                                    // parado respirando enquanto espera
-          if (!c.cercoLivre) { c.estado = "andar"; continue; }
+          if (!c.avancou) c.x = Math.max(c.x, xC);                                 // não passa do 2º quadrado
+          if (CERCO.deLonge.includes(c.tipo)) { c.miraCastelo = true; c.fixo = false; }   // de longe: ataca o castelo (lógica dele, abaixo)
+          else {
+            if (CERCO.pertoSegue) { c.cercoEspera = (c.cercoEspera || 0) + dt; if (c.cercoEspera >= CERCO.esperaPerto) c.cercoLivre = true; }
+            c.fixo = !c.cercoLivre;                                                  // de perto: parado respirando, esperando alguém
+            if (!c.cercoLivre) { c.estado = "andar"; continue; }
+          }
         }
       }
+    }
+    if (c.dono && !ladoB(c.x) && c.surgir >= 1 && c.x <= G.left + INVOCADOS.paraEm) {   // INVOCADOS: chegou no castelo e fica batendo
+      c.x = G.left + INVOCADOS.paraEm; c.estado = "atacar"; c.fixo = false;
+      const anC = c.tipo && PERSONAGENS[c.tipo].anims.atacar;
+      if (anC && anC.ok && anC.quadroGolpe != null) {                  // golpe no quadro certo da folha de ataque
+        c.tA = (c.tA || 0) + dt;
+        const q = Math.floor(c.tA * anC.fps);
+        if (!c.golpeFeito && q >= anC.quadroGolpe) { c.golpeFeito = true; acertarCasteloCerco("monsters", INVOCADOS.dano, c.y); }
+        if (q >= anC.quadros) { c.tA -= anC.quadros / anC.fps; c.golpeFeito = false; }
+      } else {
+        c.tAnim += dt; c.atkCastelo = (c.atkCastelo ?? INVOCADOS.cada) - dt;
+        if (c.atkCastelo <= 0) { c.atkCastelo = INVOCADOS.cada; acertarCasteloCerco("monsters", INVOCADOS.dano, c.y); }
+      }
+      continue;
     }
     const gerador = c.tipo && PERSONAGENS[c.tipo].gerador;
     if (gerador) {                                            // ESQUELETO_BLACK: sentado, respirando e soltando energia
@@ -2604,12 +2652,15 @@ function atualizar(dt) {
       atualizarNecro(c, perT, dt);          // Esqueleto Mago: anda uma vez, depois só ataca de longe e invoca
     } else if (anT && anT.ok) {                    // Esqueleto Arqueiro: atira de longe em vez de bater
       const t = perT.tiro;
-      const mira = (c.x < G.right - 10 || ladoB(c.x)) && plantas.some(p => p.r === c.r && alvoGuerreiro(p) && c.x - p.x > -10 && c.x - p.x < t.alcance);
+      const mira = c.miraCastelo || ((c.x < G.right - 10 || ladoB(c.x)) && plantas.some(p => p.r === c.r && alvoGuerreiro(p) && c.x - p.x > -10 && c.x - p.x < t.alcance));   // CERCO: o castelo também é alvo
       if (c.atirando) {
         c.tTiro += dt;
         const q = Math.floor(c.tTiro * anT.fps);
-        if (!c.soltou && q >= anT.quadroTiro) { c.soltou = true; flechaInimiga(c, perT); }
-        if (q >= anT.quadros) { c.atirando = false; c.espera = t.intervalo; }
+        if (!c.soltou && q >= anT.quadroTiro) {
+          c.soltou = true; flechaInimiga(c, perT);
+          if (c.miraCastelo) { const s = tiros[tiros.length - 1]; s.castelo = true; s.yChao = c.y; }   // CERCO: segue até o castelo
+        }
+        if (q >= anT.quadros) { c.atirando = false; c.espera = c.miraCastelo ? Math.max(t.intervalo, CERCO.cada) : t.intervalo; }
       } else if (mira) {
         c.espera = (c.espera ?? 0) - dt;
         if (c.espera <= 0) { c.atirando = true; c.tTiro = 0; c.soltou = false; }
@@ -2782,7 +2833,7 @@ const MODO_DEV = /[?&]dev=1/.test(location.search);
 const GRADE_VISIVEL = { marcadores: MODO_DEV, xadrez: MODO_DEV };
 function desenharMarcadores(g) {
   if (!GRADE_VISIVEL.marcadores) return;
-  g.font = "800 20px Grandstander, 'Trebuchet MS', sans-serif";
+  g.font = `800 20px ${FONTE_CARTOON}`;
   g.textAlign = "center"; g.textBaseline = "middle";
   for (let r = 0; r < G.rows; r++) {
     const y = G.top + r * G.ch + G.ch / 2;
@@ -2794,7 +2845,7 @@ function desenharMarcadores(g) {
     const x = celX(c);
     g.fillStyle = "rgba(43,32,48,.9)"; g.beginPath(); g.arc(x, G.top - 20, 13, 0, 7); g.fill();
     g.lineWidth = 2; g.strokeStyle = "rgba(233,183,82,.8)"; g.stroke();
-    g.fillStyle = "#fff4d6"; g.font = "800 16px Grandstander, 'Trebuchet MS', sans-serif"; g.fillText(String(c + 1), x, G.top - 19);
+    g.fillStyle = "#fff4d6"; g.font = `800 16px ${FONTE_CARTOON}`; g.fillText(String(c + 1), x, G.top - 19);
   }
 }
 if (document.fonts) document.fonts.ready.then(() => { if (imgFundo.complete && imgFundo.naturalWidth) desenharFundoImagem(); });
@@ -2931,9 +2982,11 @@ function desenharFogo(lista = TOCHAS) {
 
 /* ---------- Interface: barra do castelo, anúncio de nível, chefão, presentes ---------- */
 const BARRAS = { meu: null, inimigo: null };                  // onde ficam as barras (para o clique de espiar)
+// BARRA_CASTELO: posição das barras embaixo. A sua começa logo depois do botão de energia; o ESPIAR fica do lado da barra inimiga
+const BARRA_CASTELO = { x: 132, largura: 600, espaco: 10, larguraEspiar: 196, margemDireita: 12 };
 function naBarra(x, y, r) { return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
 function desenharBarraCastelo() {
-  const cx = (G.left + G.right) / 2, w = 640, h = 44, x = cx - w / 2, y = H - cortBase - h - 12;
+  const w = BARRA_CASTELO.largura, h = 44, x = BARRA_CASTELO.x, y = H - cortBase - h - 12;
   BARRAS.meu = { x, y, w, h };
   const d = nucleoDor, tre = d > 0 && !reduzMov ? Math.sin(tempo * 60) * 2 * d : 0;
   ctx.save(); ctx.translate(tre, 0);
@@ -2948,7 +3001,7 @@ function desenharBarraCastelo() {
   // ícone e nome
   ctx.font = "22px 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText("🏰", x + 26, y + h / 2 + 1);
-  ctx.font = "800 13px Grandstander, 'Trebuchet MS', sans-serif"; ctx.fillStyle = "#ffe7a6"; ctx.textAlign = "left";
+  ctx.font = `800 13px ${FONTE_CARTOON}`; ctx.fillStyle = "#ffe7a6"; ctx.textAlign = "left";
   ctx.fillText("CASTELO", x + 44, y + h / 2 + 1);
   // barra de vida
   const troca = pvp && modoM, minhaVida = troca ? vidaInimigo : vida;   // PARTIDA_PVP de Monsters: o seu castelo, por dentro, é o da direita
@@ -2966,18 +3019,18 @@ function desenharBarraCastelo() {
   ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 1;
   for (let i = 1; i < 10; i++) { const tx = bx + bw * i / 10; ctx.beginPath(); ctx.moveTo(tx, by + 3); ctx.lineTo(tx, by + bh - 3); ctx.stroke(); }
   ctx.strokeStyle = "rgba(255,230,160,.35)"; rr(bx, by, bw, bh, bh / 2); ctx.stroke();
-  ctx.font = "800 13px Grandstander, 'Trebuchet MS', sans-serif"; ctx.fillStyle = "#fff4d6"; ctx.textAlign = "center";
+  ctx.font = `800 13px ${FONTE_CARTOON}`; ctx.fillStyle = "#fff4d6"; ctx.textAlign = "center";
   ctx.fillText(`${Math.ceil(minhaVida)} / 100`, bx + bw / 2, by + bh / 2 + 1);
   // nível e onda
   const ix = x + w - 142;
   ctx.fillStyle = "rgba(255,217,122,.12)"; rr(ix, y + 8, 132, h - 16, 10); ctx.fill();
-  ctx.fillStyle = "#ffd97a"; ctx.font = "800 13px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.fillStyle = "#ffd97a"; ctx.font = `800 13px ${FONTE_CARTOON}`;
   const onda = !ondas ? "Livre" : camp.fase === "chefe" || camp.fase === "chefePrep" ? "CHEFÃO" : camp.fase === "nivelOk" ? "Concluído"
     : camp.fase === "preparo" ? `Preparo ${Math.ceil(camp.t)}s` : `Onda ${Math.max(1, camp.onda)}/${CAMPANHA.ondas(camp.nivel)}`;
   ctx.fillText(pvp ? textoPvp() : `Nível ${camp.nivel} · ${onda}`, ix + 66, y + h / 2 + 1, 124);
   ctx.restore();
   // CAMPO_COMPRIDO: vida do castelo do outro lado
-  const ex = x + w + 10, ew = W - ex - 12, di = nucleoDorInimigo, tr = di > 0 && !reduzMov ? Math.sin(tempo * 60) * 2 * di : 0;
+  const ex = x + w + BARRA_CASTELO.espaco, ew = W - BARRA_CASTELO.margemDireita - BARRA_CASTELO.larguraEspiar - BARRA_CASTELO.espaco - ex, di = nucleoDorInimigo, tr = di > 0 && !reduzMov ? Math.sin(tempo * 60) * 2 * di : 0;
   BARRAS.inimigo = { x: ex, y, w: ew, h };
   const sobreBarra = mouse.dentro && naBarra(mouse.x, mouse.y, BARRAS.inimigo);
   ctx.save(); ctx.translate(tr, 0);
@@ -2991,24 +3044,25 @@ function desenharBarraCastelo() {
   ctx.fillStyle = "#170c10"; rr(ebx, eby, ebw, ebh, ebh / 2); ctx.fill();
   const vidaDeles = troca ? vida : vidaInimigo;
   if (vidaDeles > 0) { ctx.fillStyle = modoM ? "#4f8fe0" : "#9a4bd0"; rr(ebx, eby, ebw * vidaDeles / 100, ebh, ebh / 2); ctx.fill(); }
-  ctx.font = "800 11px Grandstander, 'Trebuchet MS', sans-serif"; ctx.fillStyle = "#fff4d6";
+  ctx.font = `800 11px ${FONTE_CARTOON}`; ctx.fillStyle = "#fff4d6";
   ctx.fillText(`${Math.ceil(vidaDeles)}`, ebx + ebw / 2, eby + ebh / 2 + 1);
   ctx.restore();
-  // ESPIAR: botão bem visível em cima da barra inimiga (custo, ou o tempo que falta para voltar)
+  // ESPIAR: botão bem visível do lado da barra inimiga (custo, ou o tempo que falta para voltar)
   const falta = Math.max(0, Math.ceil((espiaAte - performance.now()) / 1000));
   const rot = espiando ? `↩ VOLTAR · ${falta}s` : `👁 ESPIAR · ${ESPIAR.custo}⚡`;
-  ctx.save(); ctx.font = "900 15px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  const bw2 = Math.max(ew - 6, ctx.measureText(rot).width + 28), bx2 = ex + ew / 2 - bw2 / 2, by2 = y - 34;
+  ctx.save(); ctx.font = `900 15px ${FONTE_CARTOON}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const bw2 = BARRA_CASTELO.larguraEspiar, bx2 = W - BARRA_CASTELO.margemDireita - bw2, by2 = y + 4;
   const pode = espiando || MODO_TESTE.energiaInfinita || energiaVista() >= ESPIAR.custo;
   const gb = ctx.createLinearGradient(0, by2, 0, by2 + 28);
   gb.addColorStop(0, pode ? "#c79bff" : "#6c6478"); gb.addColorStop(1, pode ? "#7b3fd0" : "#3b3546");
   ctx.shadowColor = "rgba(0,0,0,.5)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
-  ctx.fillStyle = gb; rr(bx2, by2, bw2, 28, 14); ctx.fill(); ctx.shadowColor = "transparent";
+  ctx.fillStyle = gb; rr(bx2, by2, bw2, h - 8, 18); ctx.fill(); ctx.shadowColor = "transparent";
   ctx.lineWidth = 2.5; ctx.strokeStyle = "#1e1030"; ctx.stroke();
-  ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.strokeStyle = "#2a1244"; ctx.strokeText(rot, bx2 + bw2 / 2, by2 + 15);
-  ctx.fillStyle = "#fff7e0"; ctx.fillText(rot, bx2 + bw2 / 2, by2 + 15);
+  ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.strokeStyle = "#2a1244"; ctx.strokeText(rot, bx2 + bw2 / 2, by2 + (h - 8) / 2 + 1);
+  ctx.fillStyle = "#fff7e0"; ctx.fillText(rot, bx2 + bw2 / 2, by2 + (h - 8) / 2 + 1);
   ctx.restore();
-  BARRAS.inimigo = { x: Math.min(ex, bx2), y: by2, w: Math.max(ew, bw2), h: y + h - by2 };   // o botão também é clicável
+  BARRAS.inimigo = { x: ex, y, w: bx2 + bw2 - ex, h };          // a barra e o botão são clicáveis
+  BARRAS.inimigoR = { x: ex, y, w: ew, h }; BARRAS.espiarR = { x: bx2, y: by2, w: bw2, h: h - 8 };   // (o TUTORIAL aponta para eles)
 }
 function desenharChefe() {
   const c = camp && camp.chefe;
@@ -3019,7 +3073,7 @@ function desenharChefe() {
   const g = ctx.createLinearGradient(0, y, 0, y + 26);
   g.addColorStop(0, "#c46cff"); g.addColorStop(1, "#6a1f9e");
   ctx.fillStyle = g; rr(x + 4, y + 4, (w - 8) * k, 18, 9); ctx.fill();
-  ctx.fillStyle = "#fff"; ctx.font = "800 12px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#fff"; ctx.font = `800 12px ${FONTE_CARTOON}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText(`☠ ESQUELETO TITÃ · CHEFÃO  ${Math.ceil(c.hp)}`, x + w / 2, y + 13.5);
 }
 function desenharBanner() {
@@ -3032,12 +3086,12 @@ function desenharBanner() {
   fx.addColorStop(0, "rgba(10,6,16,0)"); fx.addColorStop(.2, "rgba(10,6,16,.72)"); fx.addColorStop(.8, "rgba(10,6,16,.72)"); fx.addColorStop(1, "rgba(10,6,16,0)");
   ctx.fillStyle = fx; ctx.fillRect(-340, -58, 680, 104);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = "900 54px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.font = `900 54px ${FONTE_CARTOON}`;
   ctx.lineWidth = 8; ctx.strokeStyle = "rgba(30,16,36,.95)"; ctx.strokeText(b.titulo, 0, -10);
   const gt = ctx.createLinearGradient(0, -40, 0, 20);
   gt.addColorStop(0, "#ffffff"); gt.addColorStop(.45, b.cor); gt.addColorStop(1, "#b8741e");
   ctx.fillStyle = gt; ctx.fillText(b.titulo, 0, -10);
-  ctx.font = "800 18px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.font = `800 18px ${FONTE_CARTOON}`;
   ctx.lineWidth = 4; ctx.strokeStyle = "rgba(20,12,26,.9)"; ctx.strokeText(b.sub, 0, 32);
   ctx.fillStyle = "#fff4d6"; ctx.fillText(b.sub, 0, 32);
   ctx.restore();
@@ -3046,7 +3100,7 @@ function desenharPendentes() {
   chipsPendentes = [];
   if (!pendentes.length) return;
   const x = 10, w = 232; let y = G.top + 4;
-  ctx.font = "800 12px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  ctx.font = `800 12px ${FONTE_CARTOON}`; ctx.textBaseline = "middle"; ctx.textAlign = "left";
   ctx.fillStyle = "rgba(20,14,26,.85)"; rr(x, y, w, 22, 11); ctx.fill();
   ctx.fillStyle = "#ffd97a"; ctx.fillText("🎁 PRESENTES — digite a casa no chat", x + 10, y + 11.5, w - 16);
   y += 26;
@@ -3185,7 +3239,7 @@ function alfaBarra(ent) {
 function barraComNivel(x, y, w, frac, nome, lv, inimigo) {
   barra(x + 7, y, w, frac, corDoNivel(lv));
   const bx = x + 7 - w / 2 - 10, by = y + 2;
-  ctx.font = "900 10px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `900 10px ${FONTE_CARTOON}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   const tw = Math.max(15, ctx.measureText(String(lv)).width + 7);
   ctx.fillStyle = inimigo ? "#3a0c12" : "#101a33"; rr(bx - tw / 2, by - 7, tw, 14, 7); ctx.fill();
   ctx.lineWidth = 1.5; ctx.strokeStyle = corDoNivel(lv); ctx.stroke();
@@ -3342,7 +3396,7 @@ function terminarGuerreiro(p, altura) {
     ctx.restore();
   }
   if (p.dono && !p.morte) {                                     // nome de quem mandou o presente
-    ctx.font = "800 11px Grandstander, 'Trebuchet MS', sans-serif";
+    ctx.font = `800 11px ${FONTE_CARTOON}`;
     const txt = "🎁 " + p.dono, w = Math.min(120, ctx.measureText(txt).width + 12), y = p.y - altura - 16;
     ctx.fillStyle = "rgba(20,14,26,.82)"; rr(p.x - w / 2, y - 8, w, 16, 8); ctx.fill();
     ctx.strokeStyle = "rgba(255,217,122,.7)"; ctx.lineWidth = 1; ctx.stroke();
@@ -3904,7 +3958,7 @@ function atualizarBarra() {
   BARRA.t += Math.sign(alvo - BARRA.t) * Math.min(Math.abs(alvo - BARRA.t), dt / .38);   // 0,38 s para abrir ou fechar
   // as energias coletadas voam para o ícone da barra, ou para a aba quando a barra está escondida
   const a = retAba(), k = suave(BARRA.t);
-  if (!CARDS_EM_CIMA) { const b = retBotaoMao(); POS_ENERGIA.x = b.x + b.w / 2; POS_ENERGIA.y = b.y + 34; return; }   // energias voam para o botão de baixo
+  if (!CARDS_EM_CIMA) { const b = retBotaoMao(); POS_ENERGIA.x = b.x + b.w / 2; POS_ENERGIA.y = b.y + 72; return; }   // energias voam para o botão de baixo
   POS_ENERGIA.x = lerp(HUD_ENERGIA.x, a.x + 40, k);
   POS_ENERGIA.y = lerp(HUD_ENERGIA.y + deslocBarra(), a.y + a.h / 2 + 1, k);
 }
@@ -3929,7 +3983,7 @@ function alvoHUD(x, y) {
 }
 function ajustarTexto(txt, larg, tam, peso = 800) {
   let t = tam;
-  do { ctx.font = `${peso} ${t}px Grandstander, 'Trebuchet MS', sans-serif`; } while (ctx.measureText(txt).width > larg && --t > 8);
+  do { ctx.font = `${peso} ${t}px ${FONTE_CARTOON}`; } while (ctx.measureText(txt).width > larg && --t > 8);
 }
 function desenharIconeEnergia(x, y, tam) {
   if (modoM) return desenharEnergiaMonstro(x, y, tam);     // MODO_MONSTERS: energia sombria
@@ -3993,7 +4047,7 @@ function desenharPainel(p, c1, c2, borda, filete) {
 }
 // Etiqueta pendurada embaixo do painel ("GUERREIROS" / "MONSTROS")
 function desenharEtiqueta(txt, cx, y, cor, corTxt) {
-  ctx.font = "800 11px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.font = `800 11px ${FONTE_CARTOON}`;
   const w = ctx.measureText(txt).width + 26;
   ctx.save(); ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
   rr(cx - w / 2, y, w, 17, 8.5); ctx.fillStyle = cor; ctx.fill(); ctx.restore();
@@ -4034,7 +4088,7 @@ function desenharBarraCards() {
   const falha = energiaFalha > 0 && Math.sin(energiaFalha * 30) > 0;
   rr(e.x + 8, e.y + 80, e.w - 16, 24, 12); ctx.fillStyle = falha ? "#ff6b5e" : "#fff3d6"; ctx.fill();
   ctx.lineWidth = 2; ctx.strokeStyle = "#1a1222"; ctx.stroke();
-  ctx.font = "800 19px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.font = `800 19px ${FONTE_CARTOON}`;
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillStyle = "#2b2030"; ctx.fillText(MODO_TESTE.energiaInfinita ? "∞" : String(energiaVista()), e.x + e.w / 2, e.y + 93);
 
@@ -4071,7 +4125,7 @@ function desenharAba() {
   if (k > .5) {                                        // barra escondida: energia continua à vista
     ctx.globalAlpha = Math.min(1, (k - .5) * 3);
     desenharIconeEnergia(a.x + 40, sy, 18 * (1 + energiaPulso * .15));
-    ctx.fillStyle = "#fff4d6"; ctx.font = "800 15px Grandstander, 'Trebuchet MS', sans-serif";
+    ctx.fillStyle = "#fff4d6"; ctx.font = `800 15px ${FONTE_CARTOON}`;
     ctx.textAlign = "left"; ctx.textBaseline = "middle";
     ctx.fillText(MODO_TESTE.energiaInfinita ? "∞" : String(energiaVista()), a.x + 54, sy + 1);
     ctx.globalAlpha = 1;
@@ -4116,7 +4170,7 @@ function seloTecla(x, y, txt, cor) {
   if (largo) rr(x - 11, y - 8, 28, 22, 11); else { ctx.beginPath(); ctx.arc(x + 3, y + 3, 11, 0, 7); }
   ctx.fill();
   ctx.lineWidth = 2; ctx.strokeStyle = cor; ctx.stroke();
-  ctx.fillStyle = "#fff4d6"; ctx.font = `800 ${largo ? 11 : 12}px Grandstander, 'Trebuchet MS', sans-serif`;
+  ctx.fillStyle = "#fff4d6"; ctx.font = `800 ${largo ? 11 : 12}px ${FONTE_CARTOON}`;
   ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, x + 3, y + 4);
 }
 const TEMA_GUERREIRO = { fundo: ["#fff8e6", "#e6c893"], filete: "rgba(160,110,40,.55)", destaque: "#f2c14e", brilho: "rgba(255,200,80,.95)" };
@@ -4127,7 +4181,7 @@ let dicaEvoluir = null;
 function desenharDicaEvoluir() {                                  // desenhada por cima de todos os cards
   if (!dicaEvoluir) return;
   const d = dicaEvoluir; dicaEvoluir = null;
-  ctx.save(); ctx.font = "800 11px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.save(); ctx.font = `800 11px ${FONTE_CARTOON}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   const tw = ctx.measureText(d.txt).width + 16;
   ctx.fillStyle = "rgba(20,14,26,.96)"; rr(d.x - tw / 2, d.y, tw, 22, 8); ctx.fill();
   ctx.strokeStyle = "rgba(255,217,122,.6)"; ctx.lineWidth = 1; ctx.stroke();
@@ -4138,7 +4192,7 @@ function retEvoluir(i) { const r = retCarta(i); return { x: r.x + r.w - 23, y: r
 function desenharNivelCarta(carta, i, x, y, w) {
   const lv = nivelG[carta.id] || 1, g = GUERREIROS[carta.id];
   ctx.save();
-  ctx.font = "900 10px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `900 10px ${FONTE_CARTOON}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillStyle = "rgba(14,10,20,.85)"; rr(x + 5, y + 50, 30, 13, 6.5); ctx.fill();
   ctx.fillStyle = corDoNivel(lv); ctx.fillText("Nv " + lv, x + 20, y + 57);
   ctx.restore();
@@ -4146,10 +4200,12 @@ function desenharNivelCarta(carta, i, x, y, w) {
 /* MÃO DE CARTAS: botão de energia embaixo à esquerda; clicando, as cartas GRANDES dos guerreiros saem da esquerda
    para a direita, em leque, na parte de baixo da tela. Clique numa carta para escolher e depois na casa do gramado.
    Clique no botão de novo (ou na tecla Q) para guardar as cartas. */
-const MAO = { escala: 1.65, espaco: 10, xInicio: 128, margemBaixo: 10, leque: .05, atraso: .045, dur: .42 };
+const MAO = { escala: 1.85, espaco: 8, xInicio: 136, margemBaixo: 10, leque: .05, atraso: .045, dur: .42 };
 const mao = { aberta: false, t: 0, sobre: -1 };
-function retBotaoMao() { return { x: 14, y: H - cortBase - 108, w: 104, h: 96 }; }
-function retBotaoPa() { return { x: 30, y: H - cortBase - 108 - 82, w: 72, h: 74 }; }   // pá (tirar guerreiro), em cima do botão de energia
+// CARTA_ENERGIA: o botão de energia virou uma carta grande (fácil de ver e de tocar no celular)
+const CARTA_ENERGIA = { x: 10, largura: 118, altura: 168, margemBaixo: 8 };
+function retBotaoMao() { const E = CARTA_ENERGIA; return { x: E.x, y: H - cortBase - E.margemBaixo - E.altura, w: E.largura, h: E.altura }; }
+function retBotaoPa() { const b = retBotaoMao(); return { x: b.x + (b.w - 72) / 2, y: b.y - 82, w: 72, h: 74 }; }   // pá (tirar guerreiro), em cima da carta de energia
 function retCartaMao(i) {
   const w = CARTA.w * MAO.escala, h = CARTA.h * MAO.escala;
   return { x: MAO.xInicio + i * (w + MAO.espaco), y: H - cortBase - MAO.margemBaixo - h, w, h };
@@ -4203,21 +4259,51 @@ function desenharMao() {
     else desenharCarta(cartas[i], i, i === mao.sobre);
     ctx.restore();
   }
-  // botão de energia (abre/fecha as cartas)
+  // CARTA_ENERGIA: carta grande com a sua energia (toque para abrir/guardar as cartas)
   const aberto = mao.aberta, sobreB = hov && hov.tipo === "botao", pul = .5 + .5 * Math.sin(tempo * 3);
+  const mon = modoM, cx = b.x + b.w / 2, sobe = sobreB ? -3 : 0, y0 = b.y + sobe;
+  const borda = mon ? ["#d9ff9a", "#6fc72a", "#2f7d16"] : ["#fff1a8", "#f6c343", "#b8740f"];
   ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,.5)"; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
-  const gb = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
-  gb.addColorStop(0, "#3a2a44"); gb.addColorStop(1, "#1d1424");
-  ctx.fillStyle = gb; rr(b.x, b.y, b.w, b.h, 18); ctx.fill();
-  ctx.shadowColor = "transparent";
-  ctx.lineWidth = 2.5; ctx.strokeStyle = aberto || sobreB ? "#ffd97a" : "#c99a3c"; ctx.stroke();
-  if (!aberto) { ctx.strokeStyle = `rgba(255,217,122,${.25 + .35 * pul})`; ctx.lineWidth = 5; rr(b.x - 3, b.y - 3, b.w + 6, b.h + 6, 20); ctx.stroke(); }
-  desenharIconeEnergia(b.x + b.w / 2, b.y + 34, sobreB ? 50 : 46);
-  ctx.fillStyle = "#fff4d6"; ctx.font = "900 17px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText(MODO_TESTE.energiaInfinita ? "∞" : String(energiaVista()), b.x + b.w / 2, b.y + 68);
-  ctx.font = "800 10px Grandstander, 'Trebuchet MS', sans-serif"; ctx.fillStyle = "#ffd97a";
-  ctx.fillText(aberto ? "▼ guardar" : "▲ cartas", b.x + b.w / 2, b.y + 85);
+  if (!aberto) {                                                    // brilho pulsando em volta: "toque aqui"
+    ctx.shadowColor = mon ? "rgba(150,240,90,.9)" : "rgba(255,210,90,.95)"; ctx.shadowBlur = 14 + 12 * pul;
+  } else { ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5; }
+  const gB = ctx.createLinearGradient(0, y0, 0, y0 + b.h);
+  gB.addColorStop(0, borda[0]); gB.addColorStop(.45, borda[1]); gB.addColorStop(1, borda[2]);
+  ctx.fillStyle = gB; rr(b.x, y0, b.w, b.h, 16); ctx.fill();         // moldura dourada (verde nos Monsters)
+  ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.lineWidth = 3; ctx.strokeStyle = "#24130a"; ctx.stroke();
+  const ix = b.x + 7, iy = y0 + 7, iw = b.w - 14, ih = b.h - 14;
+  const gI = ctx.createLinearGradient(0, iy, 0, iy + ih);
+  gI.addColorStop(0, mon ? "#2c2440" : "#3b2c5c"); gI.addColorStop(1, mon ? "#120e1c" : "#1a1230");
+  ctx.fillStyle = gI; rr(ix, iy, iw, ih, 11); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.stroke();
+  // raios de luz atrás do ícone
+  ctx.save(); rr(ix, iy, iw, ih, 11); ctx.clip();
+  ctx.translate(cx, y0 + 72); ctx.rotate(tempo * .35);
+  ctx.fillStyle = mon ? "rgba(190,255,120,.10)" : "rgba(255,220,120,.12)";
+  for (let k = 0; k < 10; k++) { ctx.rotate(Math.PI / 5); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, -90); ctx.lineTo(9, -90); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
+  // plaquinha "ENERGIA" no topo
+  ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+  ctx.font = `15px ${FONTE_CARTOON}`;
+  ctx.lineWidth = 4; ctx.strokeStyle = "#24130a"; ctx.strokeText("ENERGIA", cx, y0 + 24);
+  ctx.fillStyle = mon ? "#d9ff9a" : "#ffe98a"; ctx.fillText("ENERGIA", cx, y0 + 24);
+  // ícone grande
+  desenharIconeEnergia(cx, y0 + 72, (sobreB ? 64 : 60) + 3 * pul);
+  // número grande
+  const num = MODO_TESTE.energiaInfinita ? "∞" : String(energiaVista());
+  ctx.font = `${num.length > 3 ? 30 : 36}px ${FONTE_CARTOON}`;
+  ctx.lineWidth = 7; ctx.strokeStyle = "#24130a"; ctx.strokeText(num, cx, y0 + 120);
+  ctx.fillStyle = "#ffffff"; ctx.fillText(num, cx, y0 + 120);
+  // faixa embaixo: abrir / guardar as cartas
+  const fy = y0 + b.h - 30;
+  const gF = ctx.createLinearGradient(0, fy, 0, fy + 22);
+  gF.addColorStop(0, borda[0]); gF.addColorStop(1, borda[2]);
+  ctx.fillStyle = gF; rr(b.x + 12, fy, b.w - 24, 22, 11); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = "#24130a"; ctx.stroke();
+  ctx.font = `13px ${FONTE_CARTOON}`;
+  ctx.lineWidth = 3; ctx.strokeText(aberto ? "▼ GUARDAR" : "▲ CARTAS", cx, fy + 12);
+  ctx.fillStyle = "#ffffff"; ctx.fillText(aberto ? "▼ GUARDAR" : "▲ CARTAS", cx, fy + 12);
   ctx.restore();
 }
 function desenharCarta(carta, i, sobre) {
@@ -4244,7 +4330,7 @@ function desenharCarta(carta, i, sobre) {
   desenharNivelCarta(carta, i, x, y, w);
 
   // custo
-  ctx.font = "800 17px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.font = `800 17px ${FONTE_CARTOON}`;
   const tw = ctx.measureText(String(g.custo)).width, bx = x + w / 2 - (tw + 20) / 2;
   desenharIconeEnergia(bx + 7, y + 100, 16);
   ctx.textAlign = "left"; ctx.textBaseline = "middle";
@@ -4259,18 +4345,18 @@ function desenharCarta(carta, i, sobre) {
     ctx.fillStyle = "#e9b752";
     rr(x + w / 2 - 10, y + 34, 20, 16, 3); ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = "#e9b752"; ctx.beginPath(); ctx.arc(x + w / 2, y + 34, 7, Math.PI, 0); ctx.stroke();
-    ctx.fillStyle = "#fff4d6"; ctx.font = "800 15px Grandstander, 'Trebuchet MS', sans-serif";
+    ctx.fillStyle = "#fff4d6"; ctx.font = `800 15px ${FONTE_CARTOON}`;
     ctx.fillText(`em ${Math.ceil(carta.bloqueio)}s`, x + w / 2, y + 68);
   } else if (carta.estoque === 0) {
     ctx.fillStyle = "rgba(60,60,66,.72)"; ctx.fillRect(x, y, w, h);
     ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.rotate(-.35);
     ctx.fillStyle = "#c0392b"; ctx.fillRect(-56, -12, 112, 24);
-    ctx.fillStyle = "#fff"; ctx.font = "800 13px Grandstander, 'Trebuchet MS', sans-serif";
+    ctx.fillStyle = "#fff"; ctx.font = `800 13px ${FONTE_CARTOON}`;
     ctx.fillText("ESGOTADO", 0, 1); ctx.restore();
   } else if (carta.recarga > 0) {
     const frac = carta.recarga / g.recarga;
     ctx.fillStyle = "rgba(20,14,28,.6)"; ctx.fillRect(x, y, w, h * frac);
-    ctx.fillStyle = "#fff4d6"; ctx.font = "800 24px Grandstander, 'Trebuchet MS', sans-serif";
+    ctx.fillStyle = "#fff4d6"; ctx.font = `800 24px ${FONTE_CARTOON}`;
     ctx.fillText(String(Math.ceil(carta.recarga)), x + w / 2, y + 40);
   } else if (!podePagar) {
     ctx.fillStyle = "rgba(20,14,28,.38)"; ctx.fillRect(x, y, w, h);
@@ -4290,7 +4376,7 @@ function desenharCarta(carta, i, sobre) {
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     rr(x + w - 28, y - 7, 34, 19, 9.5); ctx.fillStyle = carta.estoque > 0 ? "#8d52c7" : "#6b6470"; ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = "#1a1222"; ctx.stroke();
-    ctx.fillStyle = "#fff"; ctx.font = "800 12px Grandstander, 'Trebuchet MS', sans-serif";
+    ctx.fillStyle = "#fff"; ctx.font = `800 12px ${FONTE_CARTOON}`;
     ctx.fillText("x" + carta.estoque, x + w - 11, y + 3);
   }
 }
@@ -4425,7 +4511,7 @@ function desenharCartaMonstro(id, i, sobre) {
     ctx.strokeStyle = "rgba(255,200,190,.45)"; ctx.lineWidth = 4; ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(x + w / 2 - 11, y + 44); ctx.lineTo(x + w / 2 + 11, y + 44);
     ctx.moveTo(x + w / 2, y + 33); ctx.lineTo(x + w / 2, y + 55); ctx.stroke(); ctx.lineCap = "butt";
-    ctx.fillStyle = "rgba(255,200,190,.6)"; ctx.font = "800 11px Grandstander, 'Trebuchet MS', sans-serif";
+    ctx.fillStyle = "rgba(255,200,190,.6)"; ctx.font = `800 11px ${FONTE_CARTOON}`;
     ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("EM BREVE", x + w / 2, y + 80);
     seloTecla(x, y, "⇧" + (i + 1), "rgba(214,84,84,.6)");
     return;
@@ -4437,7 +4523,7 @@ function desenharCartaMonstro(id, i, sobre) {
   desenharRetratoMonstro(id, x, y, w);
   plaquinha(x, y, w, per.nome.replace("Esqueleto ", "Esq. "), "#1a0d12", "#ffd9d4");
   // vida (no modo Monsters: o custo em energia)
-  ctx.font = "800 16px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.font = `800 16px ${FONTE_CARTOON}`;
   const txt = String(modoM ? custoMonstro(id) : per.vida), tw = ctx.measureText(txt).width, bx = x + w / 2 - (tw + 20) / 2;
   if (modoM) desenharIconeEnergia(bx + 7, y + 101, 18); else desenharCoracao(bx + 7, y + 101, 15, "#ff6b5e");
   ctx.fillStyle = "#ffd9d4"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
@@ -4456,7 +4542,7 @@ function desenharCartaMonstroMao(id, i, sobre) {
   molduraCarta(x, y, w, h, TEMA_GUERREIRO, escolhida, sobre);
   desenharRetratoMonstro(id, x, y, w);
   plaquinha(x, y, w, per.nome.replace("Esqueleto ", "Esq. "), "#2b2030", "#fff4d6");
-  ctx.font = "800 17px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.font = `800 17px ${FONTE_CARTOON}`;
   const tw = ctx.measureText(String(custo)).width, bx = x + w / 2 - (tw + 20) / 2;
   desenharIconeEnergia(bx + 7, y + 100, 16);
   ctx.textAlign = "left"; ctx.textBaseline = "middle";
@@ -4467,7 +4553,7 @@ function desenharCartaMonstroMao(id, i, sobre) {
   if (!per.anims.andar.ok) { ctx.fillStyle = "rgba(20,14,28,.6)"; ctx.fillRect(x, y, w, h); }
   else if (rec > 0) {
     ctx.fillStyle = "rgba(20,14,28,.6)"; ctx.fillRect(x, y, w, h * rec / recargaMonstro(id));
-    ctx.fillStyle = "#fff4d6"; ctx.font = "800 24px Grandstander, 'Trebuchet MS', sans-serif";
+    ctx.fillStyle = "#fff4d6"; ctx.font = `800 24px ${FONTE_CARTOON}`;
     ctx.fillText(String(Math.ceil(rec)), x + w / 2, y + 40);
   } else if (!podePagar) { ctx.fillStyle = "rgba(20,14,28,.38)"; ctx.fillRect(x, y, w, h); }
   else {
@@ -4497,7 +4583,7 @@ function desenharSlotPa(sobre) {
   ctx.fillStyle = gl; ctx.fillRect(p.x, y, p.w, p.h); ctx.restore();
   desenharPa(p.x + p.w / 2, y + 44, 56, paAtiva ? -.25 : -.6);
   rr(p.x + 6, y + 80, p.w - 12, 20, 6); ctx.fillStyle = "#2b2030"; ctx.fill();
-  ctx.fillStyle = "#fff4d6"; ctx.font = "800 12px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.fillStyle = "#fff4d6"; ctx.font = `800 12px ${FONTE_CARTOON}`;
   ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(paAtiva ? "ATIVA" : "PÁ", p.x + p.w / 2, y + 90);
   seloTecla(p.x, y, "X", "#e9b752");
 }
@@ -4526,7 +4612,7 @@ function desenharDica() {
     titulo = "Pá"; linha1 = "Clique aqui e depois num guerreiro para tirá-lo da arena";
     linha2 = "Atalho: X · Esc cancela · a energia não volta"; cor = "#e9b752"; x = HUD.pa.x;
   }
-  ctx.font = "400 12px 'Atkinson Hyperlegible', system-ui, sans-serif";
+  ctx.font = `400 12px ${FONTE_TEXTO}`;
   const w = Math.max(200, ctx.measureText(linha1).width, ctx.measureText(linha2).width) + 24;
   const h = linha2 ? 62 : 46;
   x = Math.min(Math.max(8, x + CARTA.w / 2 - w / 2), W - w - 8);
@@ -4535,8 +4621,8 @@ function desenharDica() {
   rr(x, y, w, h, 10); ctx.fillStyle = "rgba(29,21,39,.96)"; ctx.fill(); ctx.restore();
   rr(x, y, w, h, 10); ctx.lineWidth = 1.5; ctx.strokeStyle = cor; ctx.stroke();
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = "#fff4d6"; ctx.font = "800 15px Grandstander, 'Trebuchet MS', sans-serif"; ctx.fillText(titulo, x + 12, y + 20);
-  ctx.fillStyle = "#cdbfda"; ctx.font = "400 12px 'Atkinson Hyperlegible', system-ui, sans-serif"; ctx.fillText(linha1, x + 12, y + 38);
+  ctx.fillStyle = "#fff4d6"; ctx.font = `800 15px ${FONTE_CARTOON}`; ctx.fillText(titulo, x + 12, y + 20);
+  ctx.fillStyle = "#cdbfda"; ctx.font = `400 12px ${FONTE_TEXTO}`; ctx.fillText(linha1, x + 12, y + 38);
   if (linha2) { ctx.fillStyle = cor; ctx.fillText(linha2, x + 12, y + 54); }
 }
 // Pá seguindo o mouse e a casa que vai ser esvaziada
@@ -4606,11 +4692,11 @@ function desenharCasaMouseMundo() {
     gl.addColorStop(0, `rgba(255,220,120,${(pode ? .22 : .1) + .12 * pul})`); gl.addColorStop(1, "rgba(255,220,120,0)");
     ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(p.x, p.y - 50, 70, 0, 7); ctx.fill(); ctx.restore();
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = "900 16px Grandstander, 'Trebuchet MS', sans-serif";
+    ctx.font = `900 16px ${FONTE_CARTOON}`;
     ctx.lineWidth = 4; ctx.strokeStyle = "rgba(20,12,26,.9)"; ctx.strokeText(`⬆ Nv ${nv}`, p.x, ty);
     ctx.fillStyle = corDoNivel(nv); ctx.fillText(`⬆ Nv ${nv}`, p.x, ty);
     // custo embaixo: número + símbolo da energia
-    ctx.font = "900 14px Grandstander, 'Trebuchet MS', sans-serif";
+    ctx.font = `900 14px ${FONTE_CARTOON}`;
     const txt = String(custo), tw = ctx.measureText(txt).width, ic = 16, larg = tw + ic + 14;
     ctx.fillStyle = "rgba(20,12,26,.85)"; rr(p.x - larg / 2, ty + 11, larg, 20, 10); ctx.fill();
     ctx.fillStyle = pode ? "#ffe7a6" : "#ff8a7a"; ctx.textAlign = "left"; ctx.fillText(txt, p.x - larg / 2 + 7, ty + 21.5);
@@ -4795,7 +4881,7 @@ function desenharPortoes() {
 // efeito de passar pelo portão ao trocar de arena, e o aviso de que você está espiando
 function desenharEspiando() {
   if (esperandoAdversario()) {                                 // ONLINE: a internet do outro atrasou
-    ctx.save(); ctx.font = "800 18px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.save(); ctx.font = `800 18px ${FONTE_CARTOON}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const txt = `Esperando ${rede.nomeOutro}... (internet lenta)`, tw = ctx.measureText(txt).width + 40;
     ctx.fillStyle = "rgba(20,14,28,.88)"; rr((W - tw) / 2, 60 + cortTopo, tw, 40, 20); ctx.fill();
     ctx.fillStyle = "#ffe7a6"; ctx.fillText(txt, W / 2, 81 + cortTopo); ctx.restore();
@@ -4814,7 +4900,7 @@ function desenharEspiando() {
   if (!espiando) return;
   const falta = Math.max(0, Math.ceil((espiaAte - performance.now()) / 1000));
   const txt = `👁 ARENA INIMIGA · volta em ${falta}s`;
-  ctx.save(); ctx.font = "900 22px Grandstander, 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.save(); ctx.font = `900 22px ${FONTE_CARTOON}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   const tw = ctx.measureText(txt).width + 44, x = (W - tw) / 2, y = 12 + cortTopo;
   const gb = ctx.createLinearGradient(0, y, 0, y + 42); gb.addColorStop(0, "#9b5ff0"); gb.addColorStop(1, "#4a1f86");
   ctx.shadowColor = "rgba(0,0,0,.5)"; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4;
@@ -5037,7 +5123,7 @@ function desenhar() {
   ctx.globalAlpha = 1;
 
   // TEXTOS_CARTOON: contorno grosso escuro, sombra embaixo e um brilho claro em cima
-  ctx.font = "900 24px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.font = `900 24px ${FONTE_CARTOON}`;
   ctx.textAlign = "center"; ctx.lineJoin = "round";
   for (const t of textos) {
     const k = 1 - t.t / .8, s = t.t < .12 ? 1 + (1 - t.t / .12) * .6 : 1;
@@ -5054,7 +5140,7 @@ function desenhar() {
   desenharChefe();
   desenharPendentes();
   desenharBarraCastelo();
-  desenharBanner();
+  if (!tut.ativo) desenharBanner();  // (durante o TUTORIAL o aviso espera)
   desenharHUD();
   desenharMao();                     // botão de energia e cartas grandes embaixo
   desenharDicaEvoluir();
@@ -5064,9 +5150,10 @@ function desenhar() {
   desenharCasaMouse();
   desenharCursorPa();
   desenharDica();
+  desenharTutorial();                // TUTORIAL: por cima de tudo
 
   if (pausado && !fim) {                                            // (o escuro do pausado é o #claraoJogo, na tela toda)
-    ctx.font = "800 54px Grandstander, 'Trebuchet MS', sans-serif"; ctx.fillStyle = "#fff4d6";
+    ctx.font = `800 54px ${FONTE_CARTOON}`; ctx.fillStyle = "#fff4d6";
     ctx.textBaseline = "middle"; ctx.fillText("Pausado", W / 2, H / 2); ctx.textBaseline = "alphabetic";
   }
 }
@@ -5195,6 +5282,12 @@ function recomecar() {
 
 addEventListener("keydown", e => {
   if (!INTRO.jogando) return;                                       // menu aberto: as teclas são do menu
+  if (tut.ativo) {                                                  // TUTORIAL: Enter/Espaço/→ próximo · ← voltar · Esc pular
+    if (e.key === "Escape") fecharTutorial();
+    else if (e.key === "ArrowLeft") irPassoTutorial(-1);
+    else if (e.key === "Enter" || e.key === " " || e.key === "ArrowRight") irPassoTutorial(1);
+    e.preventDefault(); return;
+  }
   if (e.target === elEntrada || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.target.tagName === "BUTTON" && (e.key === "Enter" || e.key === " ")) return;
   if (e.shiftKey && /^Digit[1-9]$/.test(e.code)) {                  // Shift + 1 a 5: escolhe o card de monstro
@@ -5266,6 +5359,7 @@ addEventListener("keydown", e => {
 cv.addEventListener("click", e => {
   const b = cv.getBoundingClientRect();
   const x = (e.clientX - b.left) * W / b.width, y = (e.clientY - b.top) * H / b.height;
+  if (tut.ativo) { cliqueTutorial(x, y); return; }              // TUTORIAL: o toque passa para o próximo passo
   // ESPIAR: clique na barra do castelo inimigo para ver a arena dele; na do seu castelo para voltar
   if (BARRAS.inimigo && naBarra(x, y, BARRAS.inimigo)) { pedirEspiar(); return; }
   if (BARRAS.meu && naBarra(x, y, BARRAS.meu) && espiando) { espiar(false); return; }
@@ -5411,6 +5505,302 @@ const carga = { pronto: false, t: 0, sumir: 1, maxEspera: 15 };
    Enquanto o menu está aberto, o jogo fica parado e não conta o tempo.
    Se o intro.js não carregar, o jogo começa direto, como era antes. */
 const INTRO = { jogando: !window.INTRO_ATIVA, lado: "heroes", partida: false };
+/* =====================================================================
+   TUTORIAL: uma mãozinha ensina a jogar, passo a passo. A cada toque aparece o próximo passo.
+   - Aparece sozinho na 1ª partida (contra o bot ou na campanha; nunca no PvP online).
+   - Pode ver de novo em Opções > "Como jogar".
+   - Enquanto o tutorial está aberto, a partida fica parada.
+   - Teclado: Enter/Espaço/→ = próximo · ← = voltar · Esc = pular.
+   Para mudar os textos, procure TUTORIAL_PASSOS.
+   ===================================================================== */
+const TUTORIAL = { chave: "hvm_tutorial_visto", primeiraVez: true, esperaInicio: .9, escuro: .68 };
+const tut = { ativo: false, i: 0, t: 0, entrada: 0, pendente: 0, botoes: {} };
+function tutorialVisto() { try { return localStorage.getItem(TUTORIAL.chave) === "1"; } catch { return false; } }
+function agendarTutorial(forcar) {
+  if (!forcar && (!TUTORIAL.primeiraVez || tutorialVisto())) return;
+  tut.pendente = TUTORIAL.esperaInicio;
+}
+function iniciarTutorial() {
+  if (rede || fim) return;
+  if (espiando) espiar(false);
+  tut.ativo = true; tut.i = 0; tut.t = 0; tut.entrada = 0; tut.pendente = 0;
+  paAtiva = false; mao.aberta = false;
+  document.documentElement.classList.add("tutorial-ativo");
+}
+function fecharTutorial() {
+  tut.ativo = false; tut.pendente = 0; mao.aberta = false;
+  try { localStorage.setItem(TUTORIAL.chave, "1"); } catch {}
+  document.documentElement.classList.remove("tutorial-ativo");
+}
+function irPassoTutorial(d) {
+  const n = passosTutorial().length;
+  tut.i = Math.max(0, tut.i + d);
+  if (tut.i >= n) { fecharTutorial(); return; }
+  tut.t = 0;
+  mao.aberta = !!passosTutorial()[tut.i].cartas;
+  if (somLigado && SONS_JOGO.tiroPlanta) tocar(SONS_JOGO.tiroPlanta.som, .35, 0, 0);
+}
+function atualizarTutorial(dt) {
+  if (rede) tut.pendente = 0;                                       // PvP online: nunca
+  if (tut.pendente > 0 && INTRO.jogando) { tut.pendente -= dt; if (tut.pendente <= 0) iniciarTutorial(); }
+  if (!tut.ativo) return;
+  tut.t += dt; tut.entrada = Math.min(1, tut.entrada + dt / .35);
+  if (!INTRO.jogando || fim || rede) fecharTutorial();
+}
+// TUTORIAL_PASSOS: o que cada passo mostra (alvo = onde fica a luz; mao = onde a mãozinha toca)
+function passosTutorial() {
+  const M = modoM;
+  const tropas = M ? "esqueletos" : "guerreiros", tropa = M ? "esqueleto" : "guerreiro", inimigos = M ? "heróis" : "monstros";
+  const cel = (r, c) => ({ x: G.left + c * G.cw, y: G.top + r * G.ch, w: G.cw, h: G.ch });
+  const centro = r => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+  const carta = i => { const r = retCartaMao(i); return { x: r.x, y: r.y, w: r.w, h: r.h }; };
+  const todasCartas = () => { const a = carta(0), b = carta(nCartasMao() - 1); return { x: a.x - 6, y: a.y - 8, w: b.x + b.w - a.x + 12, h: a.h + 14 }; };
+  const orbe = { x: G.left + G.cw * 4.5, y: G.top + G.ch * 1.6 };
+  const castelo = { x: 4, y: 110, w: G.left - 14, h: G.bottom - 110 };
+  const bE = BARRAS.espiarR, bI = BARRAS.inimigoR, bM = BARRAS.meu;
+  return [
+    { titulo: "Bem-vindo, comandante!", icone: "⚔️",
+      texto: `Vou te ensinar a jogar Heroes vs Monsters. É rapidinho! Toque na tela para ver cada passo.` },
+    { titulo: "Seu castelo", alvo: castelo, mao: centro(castelo),
+      texto: `Este é o seu castelo. Se a vida dele chegar a zero, você perde. Proteja ele a todo custo!` },
+    { titulo: "Vida do castelo", alvo: bM, mao: bM && { x: bM.x + bM.w * .45, y: bM.y + bM.h / 2 },
+      texto: `Aqui você vê quanta vida o seu castelo ainda tem.` },
+    { titulo: "Pegue a energia", alvo: { x: orbe.x - 46, y: orbe.y - 46, w: 92, h: 92 }, mao: orbe, orbeDemo: orbe,
+      texto: `A energia cai do céu na sua arena. Toque nela para pegar: sem energia, você não coloca ninguém!` },
+    { titulo: "Sua energia", alvo: retBotaoMao(), mao: centro(retBotaoMao()),
+      texto: `Esta carta mostra quanta energia você tem. Toque nela para abrir (e guardar) as suas cartas.` },
+    { titulo: "Suas cartas", cartas: true, alvo: todasCartas(), mao: centro(carta(1)),
+      texto: `Cada carta é um ${tropa}. O número com o raio é quanto de energia ele custa.` },
+    { titulo: "Coloque na arena", cartas: true, alvo: [carta(1), cel(2, 1)], arrastar: [centro(carta(1)), centro(cel(2, 1))],
+      texto: `Toque numa carta e depois numa casa do gramado. Pronto: o ${tropa} entra na batalha!` },
+    { titulo: M ? "Esqueleto Black" : "Elara", cartas: true, alvo: carta(0), mao: centro(carta(0)),
+      texto: M ? `O Esqueleto Black não luta: ele fica sentado gerando energia para você. Coloque logo no começo!`
+               : `A Elara não luta: ela medita e gera energia para você. Coloque logo no começo!` },
+    { titulo: "O portal", alvo: { x: W - 165, y: G.top - 10, w: 160, h: G.bottom - G.top + 20 }, mao: { x: W - 85, y: G.top + G.ch * 2.5 },
+      texto: `Seus ${tropas} andam sozinhos até o portal e atravessam para a arena do inimigo.` },
+    { titulo: "O cerco", diagrama: "cerco",
+      texto: `Na arena inimiga, todo atacante PARA no 2º quadrado antes do castelo. Quem atira de longe ataca o castelo de lá. Quem luta de perto fica esperando alguém para lutar.` },
+    { titulo: "Defenda o quadrado 1", alvo: { x: G.left, y: G.top, w: G.cw * 2, h: G.ch * G.rows }, mao: centro(cel(2, 0)),
+      texto: `Os ${inimigos} também param no 2º quadrado da SUA arena. Coloque alguém no 1º quadrado para derrotar quem está esperando, e derrube logo os que atiram de longe!` },
+    { titulo: "Esqueleto Mago", alvo: { x: G.left + G.cw * 6, y: G.top, w: G.cw, h: G.ch * G.rows }, mao: centro(cel(2, 6)),
+      texto: M ? `Seu Esqueleto Mago para na coluna 7, ataca o castelo de longe e invoca esqueletos que correm até o castelo inimigo. Se ele cair, os invocados caem junto.`
+               : `O Esqueleto Mago para na coluna 7, ataca seu castelo de longe e invoca esqueletos que correm até o castelo. Derrote o Mago e todos os invocados somem!` },
+    { titulo: "Espiar", alvo: bE, mao: bE && centro(bE),
+      texto: `Gaste ${ESPIAR.custo} de energia para ver a arena do inimigo por alguns segundos e descobrir o que ele está preparando.` },
+    { titulo: "Castelo inimigo", alvo: bI, mao: bI && centro(bI),
+      texto: `Esta é a vida do castelo inimigo. Derrube ele para vencer!` },
+    { titulo: "Batalha PvP", diagrama: "pvp",
+      texto: `Ganha quem derrubar o castelo do outro, ou quem terminar com mais vida. Cada vitória contra o bot deixa ele mais difícil!` },
+    { titulo: "Fique mais forte", icone: "🪙",
+      texto: `Vencendo, você ganha moedas e troféus. Na tela Personagens, use as moedas para evoluir: cada nível dá +5% de vida e de dano.` },
+    { titulo: "Pronto para a batalha!", icone: "🏆", final: true,
+      texto: `Agora é com você. Pegue energia, monte sua defesa e derrube o castelo inimigo. Boa sorte, comandante!` }
+  ];
+}
+function caminhoArredondado(x, y, w, h, r) {
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function quebrarLinhas(txt, larg) {
+  const palavras = txt.split(" "), linhas = []; let atual = "";
+  for (const p of palavras) {
+    const t = atual ? atual + " " + p : p;
+    if (ctx.measureText(t).width > larg && atual) { linhas.push(atual); atual = p; } else atual = t;
+  }
+  if (atual) linhas.push(atual);
+  return linhas;
+}
+function textoCartoon(txt, x, y, cor, contorno = 6) {
+  ctx.lineJoin = "round"; ctx.lineWidth = contorno; ctx.strokeStyle = "#24130a"; ctx.strokeText(txt, x, y);
+  ctx.fillStyle = cor; ctx.fillText(txt, x, y);
+}
+// a mãozinha: dedo apontando em (x, y); aperta = 0..1 (afunda e solta as ondas)
+function desenharMaozinha(x, y, aperta, alfa = 1) {
+  ctx.save(); ctx.globalAlpha *= alfa;
+  if (aperta > 0) {                                                  // ondas do toque
+    for (let k = 0; k < 2; k++) {
+      const u = (aperta + k * .35) % 1;
+      ctx.strokeStyle = `rgba(255,236,150,${(1 - u) * .9})`; ctx.lineWidth = 4 * (1 - u) + 1;
+      ctx.beginPath(); ctx.arc(x, y, 12 + u * 46, 0, 7); ctx.stroke();
+    }
+  }
+  const esc = 1 - .12 * Math.sin(Math.min(1, aperta * 2) * Math.PI);
+  ctx.translate(x, y); ctx.rotate(-.18); ctx.scale(esc, esc);
+  ctx.font = "84px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  ctx.shadowColor = "rgba(0,0,0,.55)"; ctx.shadowBlur = 10; ctx.shadowOffsetY = 6;
+  ctx.fillText("👆", 10, -8);
+  ctx.restore();
+}
+function desenharDiagramaTutorial(tipo, x, y, w) {
+  ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const emoji = (e, ex, ey, t) => { ctx.fillStyle = "#ffffff"; ctx.font = `${t}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif`; ctx.fillText(e, ex, ey); };
+  if (tipo === "cerco") {
+    const cw = 92, ch = 62, n = 4, x0 = x + (w - (cw * (n + 1) + 8)) / 2;
+    const linhas = [{ e: "🏹", txt: "atira no castelo", cor: "#ffd34d" }, { e: "🗡️", txt: "espera alguém", cor: "#9fd0ff" }];
+    linhas.forEach((L, li) => {
+      const yy = y + li * (ch + 10);
+      ctx.fillStyle = "#5a5f7a"; ctx.beginPath(); caminhoArredondado(x0, yy, cw, ch, 12); ctx.fill();
+      emoji("🏰", x0 + cw / 2, yy + ch / 2 + 2, 38);
+      for (let c = 0; c < n; c++) {
+        const cx = x0 + cw + 8 + c * cw;
+        ctx.fillStyle = c === 0 ? "rgba(120,230,110,.35)" : c === 1 ? "rgba(255,200,80,.35)" : "rgba(255,255,255,.08)";
+        ctx.beginPath(); caminhoArredondado(cx + 3, yy, cw - 6, ch, 12); ctx.fill();
+        ctx.strokeStyle = c === 0 ? "#7be06a" : c === 1 ? "#ffc84e" : "rgba(255,255,255,.25)"; ctx.lineWidth = 3;
+        if (c === 0) ctx.setLineDash([8, 6]); ctx.stroke(); ctx.setLineDash([]);
+        ctx.font = `18px ${FONTE_CARTOON}`; textoCartoon(String(c + 1), cx + 16, yy + 14, "#fff", 4);
+        if (c === 1) emoji(L.e, cx + cw / 2 + 6, yy + ch / 2 + 4, 32);
+      }
+      if (li === 0) {                                            // a flecha voando para o castelo
+        const k = (tut.t * .8) % 1, fx = x0 + cw + 8 + cw * 1.5 - k * (cw * 1.2);
+        ctx.globalAlpha = 1 - k * .3; emoji("➶", fx, yy + ch / 2 - 10, 26); ctx.globalAlpha = 1;
+      }
+      ctx.font = `600 17px ${FONTE_TEXTO}`; ctx.textAlign = "left";
+      ctx.fillStyle = L.cor; ctx.fillText(L.txt, x0 + cw + 8 + cw * 2 + 12, yy + ch / 2 + 1);
+      ctx.textAlign = "center";
+    });
+    ctx.font = `600 16px ${FONTE_TEXTO}`; ctx.fillStyle = "#b9f5a8";
+    ctx.fillText("▲ coloque alguém no quadrado 1 para lutar", x0 + cw + 8 + cw / 2 + 110, y + 2 * (ch + 10) + 8);
+  } else if (tipo === "pvp") {
+    const itens = [["⏱️", "25 s", "preparo"], ["⚔️", "3 min", "batalha"], ["🏰", "0", "castelo caiu = vitória"]];
+    const iw = 190, gap = 18, x0 = x + (w - (iw * 3 + gap * 2)) / 2;
+    itens.forEach((it, k) => {
+      const ix = x0 + k * (iw + gap);
+      ctx.fillStyle = "rgba(255,255,255,.09)"; ctx.beginPath(); caminhoArredondado(ix, y, iw, 112, 18); ctx.fill();
+      ctx.strokeStyle = "rgba(255,217,122,.6)"; ctx.lineWidth = 2.5; ctx.stroke();
+      emoji(it[0], ix + iw / 2, y + 30, 34);
+      ctx.font = `28px ${FONTE_CARTOON}`; textoCartoon(it[1], ix + iw / 2, y + 68, "#ffe98a", 6);
+      ctx.font = `600 15px ${FONTE_TEXTO}`; ctx.fillStyle = "#e9e4f2"; ctx.fillText(it[2], ix + iw / 2, y + 96);
+    });
+  }
+  ctx.restore();
+}
+function desenharTutorial() {
+  if (!tut.ativo) return;
+  const passos = passosTutorial(), P = passos[tut.i];
+  const alvos = [].concat(P.alvo || []).filter(Boolean);
+  ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.globalAlpha = tut.entrada;
+  // 1) escuro em tudo, menos onde está a luz (as laterais escurecem pelo CSS, com o mesmo tom)
+  const pad = 10, pulsa = .5 + .5 * Math.sin(tut.t * 4);
+  ctx.beginPath(); ctx.rect(-20, -20, W + 40, H + 40);
+  for (const r of alvos) caminhoArredondado(r.x - pad, r.y - pad, r.w + pad * 2, r.h + pad * 2, 18);
+  ctx.fillStyle = `rgba(6,5,12,${TUTORIAL.escuro})`; ctx.fill("evenodd");
+  for (const r of alvos) {                                          // borda dourada pulsando em volta da luz
+    ctx.beginPath(); caminhoArredondado(r.x - pad, r.y - pad, r.w + pad * 2, r.h + pad * 2, 18);
+    ctx.shadowColor = "rgba(255,210,90,.9)"; ctx.shadowBlur = 16 + 10 * pulsa;
+    ctx.strokeStyle = `rgba(255,226,130,${.7 + .3 * pulsa})`; ctx.lineWidth = 4; ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  if (P.orbeDemo) {                                                 // energia de exemplo, flutuando
+    const o = P.orbeDemo, by = Math.sin(tut.t * 3) * 5;
+    const gl = ctx.createRadialGradient(o.x, o.y + by, 4, o.x, o.y + by, 46);
+    gl.addColorStop(0, "rgba(255,220,110,.6)"); gl.addColorStop(1, "rgba(255,220,110,0)");
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(o.x, o.y + by, 46, 0, 7); ctx.fill();
+    desenharIconeEnergia(o.x, o.y + by, 54);
+  }
+  // 2) caixa com o texto (fica do lado oposto da luz)
+  const bw = 760, temD = !!P.diagrama, dH = P.diagrama === "cerco" ? 186 : P.diagrama === "pvp" ? 126 : 0;
+  ctx.font = `600 24px ${FONTE_TEXTO}`;
+  const linhas = quebrarLinhas(P.texto, bw - 64);
+  const bh = 72 + (P.icone ? 0 : 0) + linhas.length * 32 + (temD ? dH + 10 : 0) + 64;
+  let bx = (W - bw) / 2, by = (H - bh) / 2;
+  if (alvos.length) {
+    const u = alvos.reduce((a, r) => ({ x1: Math.min(a.x1, r.x), y1: Math.min(a.y1, r.y), x2: Math.max(a.x2, r.x + r.w), y2: Math.max(a.y2, r.y + r.h) }), { x1: 1e9, y1: 1e9, x2: -1e9, y2: -1e9 });
+    const cy = (u.y1 + u.y2) / 2;
+    if (u.x2 < 420) bx = Math.min(W - bw - 20, u.x2 + 40);              // luz na esquerda: caixa à direita
+    else if (u.x1 > W - 260) bx = Math.max(20, u.x1 - bw - 40);         // luz na direita: caixa à esquerda
+    if (u.x2 < 420 || u.x1 > W - 260) by = (H - bh) / 2;
+    else by = cy > H * .5 ? Math.max(16, u.y1 - bh - 34) : Math.min(H - bh - 16, u.y2 + 34);
+    if (u.y2 - u.y1 > H * .55 && !(u.x2 < 420 || u.x1 > W - 260)) by = 16;   // luz alta no meio: caixa em cima
+  }
+  const sobe = (1 - easeOutBack(Math.min(1, tut.t / .4))) * 30;
+  by += sobe;
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,.6)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
+  ctx.fillStyle = "#24130a"; ctx.beginPath(); caminhoArredondado(bx - 6, by - 6, bw + 12, bh + 12 + 8, 30); ctx.fill();
+  ctx.shadowColor = "transparent";
+  const gb = ctx.createLinearGradient(0, by, 0, by + bh);
+  gb.addColorStop(0, "#ffe98a"); gb.addColorStop(.5, "#f0a21c"); gb.addColorStop(1, "#c97a0c");
+  ctx.fillStyle = gb; ctx.beginPath(); caminhoArredondado(bx, by, bw, bh, 26); ctx.fill();
+  const gi = ctx.createLinearGradient(0, by, 0, by + bh);
+  gi.addColorStop(0, "#3a4a91"); gi.addColorStop(1, "#1d2452");
+  ctx.fillStyle = gi; ctx.beginPath(); caminhoArredondado(bx + 7, by + 7, bw - 14, bh - 14, 20); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.08)"; ctx.beginPath(); caminhoArredondado(bx + 14, by + 12, bw - 28, 42, 16); ctx.fill();
+  ctx.restore();
+  // título
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = `36px ${FONTE_CARTOON}`;
+  const tit = (P.icone ? P.icone + "  " : "") + P.titulo;
+  textoCartoon(tit, bx + bw / 2, by + 42, "#ffe98a", 8);
+  // texto
+  ctx.font = `600 24px ${FONTE_TEXTO}`; ctx.fillStyle = "#ffffff";
+  linhas.forEach((l, k) => ctx.fillText(l, bx + bw / 2, by + 88 + k * 32));
+  if (temD) desenharDiagramaTutorial(P.diagrama, bx + 20, by + 80 + linhas.length * 32 + 6, bw - 40);
+  // rodapé: pontinhos do progresso, voltar e próximo
+  const ry = by + bh - 34;
+  const n = passos.length, dw = 14, dx0 = bx + bw / 2 - (n * dw) / 2 + dw / 2;
+  for (let k = 0; k < n; k++) {
+    ctx.fillStyle = k === tut.i ? "#ffe98a" : k < tut.i ? "rgba(255,233,138,.55)" : "rgba(255,255,255,.22)";
+    ctx.beginPath(); ctx.arc(dx0 + k * dw, ry, k === tut.i ? 5.5 : 4, 0, 7); ctx.fill();
+  }
+  tut.botoes = {};
+  if (tut.i > 0) {
+    ctx.font = `20px ${FONTE_CARTOON}`; ctx.textAlign = "left";
+    textoCartoon("◀ Voltar", bx + 28, ry + 1, "#cfd6ff", 5);
+    tut.botoes.voltar = { x: bx + 14, y: ry - 22, w: 130, h: 44 };
+  }
+  ctx.textAlign = "right";
+  if (P.final) {
+    const jw = 190, jh = 50, jx = bx + bw - jw - 22, jy = ry - jh / 2;
+    ctx.save(); ctx.shadowColor = "rgba(255,210,90,.9)"; ctx.shadowBlur = 12 + 10 * pulsa;
+    const gj = ctx.createLinearGradient(0, jy, 0, jy + jh);
+    gj.addColorStop(0, "#d9ff9a"); gj.addColorStop(.5, "#8be03c"); gj.addColorStop(1, "#2f7d16");
+    ctx.fillStyle = gj; ctx.beginPath(); caminhoArredondado(jx, jy, jw, jh, 18); ctx.fill(); ctx.restore();
+    ctx.lineWidth = 3; ctx.strokeStyle = "#123006"; ctx.stroke();
+    ctx.font = `28px ${FONTE_CARTOON}`; ctx.textAlign = "center"; textoCartoon("JOGAR!", jx + jw / 2, jy + jh / 2 + 1, "#fff", 6);
+    tut.botoes.jogar = { x: jx, y: jy, w: jw, h: jh };
+  } else {
+    ctx.font = `20px ${FONTE_CARTOON}`; ctx.globalAlpha = tut.entrada * (.65 + .35 * pulsa);
+    textoCartoon("Toque para continuar ▶", bx + bw - 26, ry + 1, "#ffffff", 5);
+    ctx.globalAlpha = tut.entrada;
+  }
+  // 3) botão pular (em cima)
+  if (!P.final) {
+    const pw = 150, ph = 44, px = (W - pw) / 2, py = 12;          // no meio, em cima (longe dos botões do canto)
+    ctx.fillStyle = "rgba(20,16,40,.85)"; ctx.beginPath(); caminhoArredondado(px, py, pw, ph, 22); ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = "rgba(255,226,130,.8)"; ctx.stroke();
+    ctx.font = `20px ${FONTE_CARTOON}`; ctx.textAlign = "center"; textoCartoon("Pular ⏭", px + pw / 2, py + ph / 2 + 1, "#fff", 5);
+    tut.botoes.pular = { x: px, y: py, w: pw, h: ph };
+  }
+  // 4) a mãozinha
+  if (P.arrastar) {
+    const [a, b] = P.arrastar, ciclo = 2.6, u = (tut.t % ciclo) / ciclo;
+    const ctrl = { x: (a.x + b.x) / 2, y: Math.min(a.y, b.y) - 140 };
+    ctx.save(); ctx.setLineDash([10, 10]); ctx.lineDashOffset = -tut.t * 40;           // caminho pontilhado
+    ctx.strokeStyle = "rgba(255,236,150,.75)"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(ctrl.x, ctrl.y, b.x, b.y); ctx.stroke(); ctx.restore();
+    let hx, hy, ap = 0, al = 1;
+    if (u < .2) { hx = a.x; hy = a.y; ap = u / .2; }
+    else if (u < .65) { const k = easeInOut((u - .2) / .45), q = 1 - k; hx = q * q * a.x + 2 * q * k * ctrl.x + k * k * b.x; hy = q * q * a.y + 2 * q * k * ctrl.y + k * k * b.y; }
+    else if (u < .85) { hx = b.x; hy = b.y; ap = (u - .65) / .2; }
+    else { hx = b.x; hy = b.y; al = 1 - (u - .85) / .15; }
+    desenharMaozinha(hx, hy, ap, al);
+  } else if (P.mao) {
+    const ciclo = 1.5, u = (tut.t % ciclo) / ciclo;
+    const chega = Math.min(1, u / .3), e = easeOutBack(chega);
+    const hx = P.mao.x + (1 - e) * 60, hy = P.mao.y + (1 - e) * 70;
+    desenharMaozinha(hx, hy, u > .35 && u < .9 ? (u - .35) / .55 : 0);
+  }
+  ctx.restore();
+}
+function cliqueTutorial(x, y) {
+  const B = tut.botoes, dentro = r => r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  if (dentro(B.pular) || dentro(B.jogar)) { fecharTutorial(); return; }
+  if (tut.t < .3) return;                                           // evita pular dois passos com um toque só
+  if (dentro(B.voltar)) { irPassoTutorial(-1); return; }
+  irPassoTutorial(1);
+}
 window.JOGO = {
   progresso: () => { const p = progressoCarga(); return { ...p, pronto: carga.pronto }; },
   somLigado: () => somLigado,
@@ -5439,8 +5829,10 @@ window.JOGO = {
     const tg = document.getElementById("tGrupo"); if (tg) { tg.value = modoM ? "monsters" : "heroes"; atualizarPainelTeste(); }
     INTRO.partida = true; INTRO.jogando = true; carga.sumir = 0; ultimo = performance.now();
     requestAnimationFrame(ajustarResolucao);
+    agendarTutorial(false);                 // TUTORIAL: na 1ª partida, a mãozinha ensina a jogar
   },
   continuar() { INTRO.jogando = true; carga.sumir = 0; ultimo = performance.now(); requestAnimationFrame(ajustarResolucao); },
+  tutorial() { agendarTutorial(true); tut.pendente = .5; },  // TUTORIAL: Opções > Como jogar
   pararParaMenu() { INTRO.jogando = false; }
 };
 function progressoCarga() {
@@ -5459,7 +5851,7 @@ function desenharCarregando() {
   g.addColorStop(0, "#1c1328"); g.addColorStop(1, "#0b0710");
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = "900 54px Grandstander, 'Trebuchet MS', sans-serif";
+  ctx.font = `900 54px ${FONTE_CARTOON}`;
   ctx.lineWidth = 8; ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.strokeText("Guerreiros Vs Monster", W / 2, H / 2 - 60);
   const gt = ctx.createLinearGradient(0, H / 2 - 90, 0, H / 2 - 30);
   gt.addColorStop(0, "#ffffff"); gt.addColorStop(.5, "#ffd97a"); gt.addColorStop(1, "#b8741e");
@@ -5470,7 +5862,7 @@ function desenharCarregando() {
   gb.addColorStop(0, "#e9b752"); gb.addColorStop(1, "#ffe7a6");
   ctx.fillStyle = gb; rr(bx, by, Math.max(18, bw * k), 18, 9); ctx.fill();
   ctx.strokeStyle = "rgba(255,217,122,.5)"; ctx.lineWidth = 1.5; rr(bx, by, bw, 18, 9); ctx.stroke();
-  ctx.font = "800 16px Grandstander, 'Trebuchet MS', sans-serif"; ctx.fillStyle = "#fff4d6";
+  ctx.font = `800 16px ${FONTE_CARTOON}`; ctx.fillStyle = "#fff4d6";
   ctx.fillText(`Carregando... ${Math.round(k * 100)}%`, W / 2, by + 44);
   ctx.globalAlpha = 1;
 }
@@ -5493,7 +5885,8 @@ function quadro(agora) {
     return;
   }
   // PASSO_FIXO: a partida anda em passos iguais de 1/60 s. A velocidade do painel de teste só muda quantos passos cabem no quadro.
-  if (pausado || fim) acumulado = 0;
+  atualizarTutorial(dt);
+  if (pausado || fim || tut.ativo || (tut.pendente > 0 && !rede)) acumulado = 0;   // TUTORIAL: a partida espera
   else {
     acumulado += dt * TESTE.velocidade;
     let n = 0;
@@ -5524,16 +5917,40 @@ if (document.fonts && document.fonts.load) document.fonts.load("800 20px Grandst
    Por dentro, a partida é SEMPRE igual nos dois aparelhos (heróis à esquerda, monstros à direita);
    quem joga de Monsters só vê a tela espelhada.
    ===================================================================== */
-/* CERCO (só no PvP): na arena inimiga, todo atacante PARA no 2º quadrado antes do castelo, para dar tempo de o
-   outro jogador colocar alguém na frente dele.
-   - Quem ataca de LONGE fica ali atirando no castelo até alguém derrubar ele.
-   - Quem luta de PERTO espera um pouco ali e depois vai até o castelo (se ninguém entrar na frente). */
+/* CERCO (em TODOS os modos: PvP online, contra o bot e campanha): na arena inimiga, todo atacante PARA no
+   2º quadrado antes do castelo, para o outro lado colocar alguém no 1º quadrado e lutar com ele.
+   - Quem ataca de LONGE fica ali e ataca o castelo com o PRÓPRIO poder (flecha, magia, fogo), como se fosse um inimigo.
+   - Quem luta de PERTO fica PARADO ali até alguém vir e derrotar ele (não vai até o castelo).
+   - Se tiver alguém entre ele e o castelo, ele vai até essa pessoa e luta; depois fica parado onde estiver.
+   - Esqueleto Mago: para na coluna 7 (paraNaColuna); sem ninguém na frente, a magia dele vai até o castelo.
+   - Esqueletos INVOCADOS pelo Mago: não param no cerco, vão até o castelo e ficam batendo nele (INVOCADOS).
+     Se o Esqueleto Mago morrer, todos os que ele invocou morrem junto. */
 const CERCO = {
   deLonge: ["arqueiro", "mago", "magoFogo", "esqueletoArqueiro", "esqueletoMago"],
-  cada: 2.0,          // segundos entre um tiro no castelo e outro
-  dano: 3,            // dano de cada tiro no castelo
-  esperaPerto: 3      // segundos que quem luta de perto espera no 2º quadrado
+  cada: 2.0,          // tempo mínimo (segundos) entre um ataque no castelo e outro
+  dano: 3,            // dano de cada ataque no castelo
+  pertoSegue: false,  // true = o de perto espera "esperaPerto" segundos e depois vai até o castelo (jeito antigo)
+  esperaPerto: 3      // (só vale com pertoSegue: true)
 };
+// INVOCADOS: esqueletos do Esqueleto Mago batendo no castelo
+const INVOCADOS = {
+  dano: 1,            // dano de cada golpe no castelo
+  cada: 1.5,          // segundos entre um golpe e outro (quando não tem a folha de ataque)
+  paraEm: -8          // onde param, em pixels a partir do começo da grama (negativo = na calçada do castelo)
+};
+// CERCO: alguém acertou o castelo. lado = quem ATACOU ("heroes" acerta o castelo da direita, "monsters" o da esquerda)
+function acertarCasteloCerco(lado, dano, yChao) {
+  const casteloDoJogador = lado === "heroes" ? simM() : !simM();   // fora do PvP, "vida" é sempre o castelo de quem joga
+  if (!casteloDoJogador) { ferirCasteloInimigo(dano, yChao); return; }
+  vida = Math.max(0, vida - dano); nucleoDor = 1;
+  somPersonagem(CASTELO, "dano", .7, 120, .06);
+  textos.push({ x: xVisto(G.left + 10), y: yChao - 90, txt: "-" + dano, cor: "#ff6b5e", t: 0 });
+  for (let i = 0; i < 14; i++) parts.push({
+    x: G.left - 20 + rand(-10, 10), y: yChao - rand(20, 90), vx: rand(-120, 120), vy: rand(-160, 40), g: 0,
+    vida: 0, max: rand(.4, .8), tam: rand(3, 6), cor: i % 2 ? "#ff6b5e" : "#cfc8bb", tipo: "ponto"
+  });
+  if (vida <= 0) terminar();                                     // fora do PvP: castelo caiu (no PvP quem decide é o atualizarPvp)
+}
 var tirosCastelo = [];                                 // tiros indo para o castelo (fazem parte da partida)
 function xCercoHerois() { return MW - celX(1); }       // 2º quadrado antes do castelo dos Monsters
 function xCercoMonstros() { return celX(1); }          // 2º quadrado antes do castelo dos Heroes
@@ -5569,6 +5986,21 @@ const PVP = {
   bot: { pensaCada: [3, 6], colunas: 3, pegaEnergiaEm: 2.5 },   // o bot pensa a cada 3 a 6 s e "clica" na energia dele 2,5 s depois que ela cai
   moedas: { vitoria: 30, derrota: 10, empate: 15 }     // contra o bot (no online também valem troféus)
 };
+/* BOT_DIFICULDADE ("Jogar sem PvP"): a cada vitória contra o bot ele sobe 1 nível e fica mais difícil.
+   Fica salvo neste aparelho. Derrota faz ele descer "derrotaDiminui" níveis (0 = nunca desce). */
+const BOT_DIFICULDADE = {
+  maximo: 15,
+  derrotaDiminui: 1,
+  pensaFacil: [3, 6],    pensaDificil: [1.1, 2.2],   // segundos entre uma jogada e outra (nível 1 -> nível máximo)
+  pegaFacil: 2.5,        pegaDificil: 0.6,           // segundos até ele pegar a energia que caiu
+  energiaInicialPorNivel: 15,                        // energia a mais no começo, por nível
+  energiaPorSegundoPorNivel: 0.35,                   // energia extra que ele ganha sozinho (por segundo, por nível)
+  colunasMax: 5                                      // no nível máximo ele coloca tropas em até 5 colunas
+};
+function nivelBotSalvo() { try { return Math.max(1, Math.min(BOT_DIFICULDADE.maximo, parseInt(localStorage.getItem("hvm_bot_nivel")) || 1)); } catch { return 1; } }
+function salvarNivelBot(n) { try { localStorage.setItem("hvm_bot_nivel", String(Math.max(1, Math.min(BOT_DIFICULDADE.maximo, n)))); } catch {} }
+function forcaBot() { return pvp && pvp.botNivel ? (pvp.botNivel - 1) / (BOT_DIFICULDADE.maximo - 1) : 0; }   // 0 = fácil, 1 = máximo
+function mistura(a, b, k) { return a + (b - a) * k; }
 var pvp = null, energiaM = 0;
 function simM() { return pvp ? false : modoM; }        // como a partida funciona por dentro (no PvP: sempre igual)
 function energiaVista() {                              // a energia que aparece para você
@@ -5622,7 +6054,13 @@ function comecarPvp(lado) {
   ondas = false;
   const bo = document.getElementById("btnOndas"); if (bo) { bo.textContent = "Campanha: desligada"; bo.disabled = true; }
   energia = PVP.energiaInicial; energiaM = PVP.energiaInicial;
-  mostrarBanner("PREPARE SUA ARENA", `Pegue a energia que cai do céu e coloque suas tropas: a batalha começa em ${PVP.preparo} s`, 4);
+  if (!rede) {                                             // BOT_DIFICULDADE: o bot começa mais forte a cada vitória
+    pvp.botNivel = nivelBotSalvo();
+    const extra = (pvp.botNivel - 1) * BOT_DIFICULDADE.energiaInicialPorNivel;
+    if (ladoBot() === "monsters") energiaM += extra; else energia += extra;
+  }
+  mostrarBanner("PREPARE SUA ARENA", `Pegue a energia que cai do céu e coloque suas tropas: a batalha começa em ${PVP.preparo} s` +
+    (pvp.botNivel ? ` · Bot nível ${pvp.botNivel}` : ""), 4);
 }
 function ladoBot() { return pvp.ladoLocal === "heroes" ? "monsters" : "heroes"; }
 function ladoQueJoga() { return pvp ? pvp.ladoLocal : (modoM ? "monsters" : "heroes"); }
@@ -5638,20 +6076,26 @@ function linhaMaisCheia(lista) {                       // linha com mais inimigo
   const melhores = n.map((v, i) => [v, i]).filter(x => x[0] === max).map(x => x[1]);
   return melhores[Math.floor(rand(0, melhores.length))];
 }
+// BOT_DIFICULDADE: quanto mais forte, mais vezes ele escolhe a tropa mais cara (mais forte) que dá para pagar
+function escolhaBot(opcoes, custo) {
+  if (rand(0, 1) < forcaBot() * .7) return opcoes.reduce((a, b) => custo(b) > custo(a) ? b : a);
+  return opcoes[Math.floor(rand(0, opcoes.length))];
+}
+function colunasBot() { return Math.round(mistura(PVP.bot.colunas, BOT_DIFICULDADE.colunasMax, forcaBot())); }
 function jogadaDoBot() {
   const lado = pvp.ladoLocal === "heroes" ? "monsters" : "heroes";
   if (lado === "monsters") {
     const opcoes = MONSTROS_CARTAS.map((id, i) => ({ id, i })).filter(o => o.id && custoMonstro(o.id) <= energiaM && !((recargaM[o.id] || 0) > 0));
     if (!opcoes.length) return;
-    const o = opcoes[Math.floor(rand(0, opcoes.length))];
-    const r = linhaMaisCheia(plantas.filter(p => !p.morte).map(p => p.r)), c = Math.floor(rand(0, PVP.bot.colunas));
+    const o = escolhaBot(opcoes, o => custoMonstro(o.id));
+    const r = linhaMaisCheia(plantas.filter(p => !p.morte).map(p => p.r)), c = Math.floor(rand(0, colunasBot()));
     agendar({ tipo: "monstroM", idx: o.i, r, c, origem: "bot" });
   } else {
     const opcoes = cartas.map((c, i) => ({ c, i })).filter(o => GUERREIROS[o.c.id] && GUERREIROS[o.c.id].custo <= energia && !(o.c.recarga > 0) && !(o.c.bloqueio > 0) && o.c.estoque !== 0);
     if (!opcoes.length) return;
-    const o = opcoes[Math.floor(rand(0, opcoes.length))];
+    const o = escolhaBot(opcoes, o => GUERREIROS[o.c.id].custo);
     const r = linhaMaisCheia(criaturas.filter(c => !c.morte).map(c => c.r));
-    const livres = []; for (let c = 0; c < PVP.bot.colunas; c++) if (!grade[r][c]) livres.push(c);
+    const livres = []; for (let c = 0; c < colunasBot(); c++) if (!grade[r][c]) livres.push(c);
     if (!livres.length) return;
     const c = livres[Math.floor(rand(0, livres.length))];
     agendar({ tipo: "colocar", carta: o.i, r, c, rotulo: LINHAS[r] + (c + 1), origem: "bot" });
@@ -5668,10 +6112,15 @@ function atualizarPvp(dt) {
     criarOrbe(xm, -40, rand(G.top + 30, G.bottom - 30), PVP.sol.valor, false, "monsters");
   }
   const bl = ladoBot();                                              // o bot "clica" na energia dele
-  if (!rede) for (const o of orbes) if (o.lado === bl && o.estado === "parado" && o.vida >= PVP.bot.pegaEnergiaEm) coletar(o);
+  const kB = forcaBot(), B = BOT_DIFICULDADE;
+  if (!rede) for (const o of orbes) if (o.lado === bl && o.estado === "parado" && o.vida >= mistura(B.pegaFacil, B.pegaDificil, kB)) coletar(o);
   if (!rede) {                                                       // BOT (só quando não é online)
+    if (pvp.botNivel > 1 && pvp.preparo <= 0) {                      // BOT_DIFICULDADE: energia extra com o tempo
+      const ganho = dt * B.energiaPorSegundoPorNivel * (pvp.botNivel - 1);
+      if (bl === "monsters") energiaM += ganho; else energia += ganho;
+    }
     pvp.botT -= dt;
-    if (pvp.botT <= 0) { pvp.botT = rand(PVP.bot.pensaCada[0], PVP.bot.pensaCada[1]); jogadaDoBot(); }
+    if (pvp.botT <= 0) { pvp.botT = rand(mistura(B.pensaFacil[0], B.pensaDificil[0], kB), mistura(B.pensaFacil[1], B.pensaDificil[1], kB)); jogadaDoBot(); }
   }
   if (pvp.preparo > 0) {                                             // PREPARO: o relógio da batalha ainda não anda
     pvp.preparo -= dt;
@@ -5694,11 +6143,16 @@ function encerrarPvp(vencedor) {
   const minha = eu === "heroes" ? vida : vidaInimigo, deles = eu === "heroes" ? vidaInimigo : vida;
   const meus = eu === "heroes" ? abatidas : pvp.mortosH, delesK = eu === "heroes" ? pvp.mortosH : abatidas;
   let ganho = 0;
+  if (!rede && pvp.botNivel && !empate) {                     // BOT_DIFICULDADE: vitória = bot mais difícil na próxima
+    const novo = venceu ? pvp.botNivel + 1 : pvp.botNivel - BOT_DIFICULDADE.derrotaDiminui;
+    salvarNivelBot(novo); pvp.botNivelNovo = nivelBotSalvo();
+  }
   if (rede) setTimeout(() => finalizarOnline(vencedor), 0);
   else if (window.PERFIL) { const r = PERFIL.ganharMoedas(venceu ? PVP.moedas.vitoria : empate ? PVP.moedas.empate : PVP.moedas.derrota, eu); ganho = r.ganho + (r.duplo || 0); }
   $("fimTitulo").textContent = venceu ? "VITÓRIA!" : empate ? "EMPATE" : "DERROTA";
   $("fimTxt").textContent = `Seu castelo: ${Math.ceil(minha)} · Castelo inimigo: ${Math.ceil(deles)} · Você derrotou ${meus} e perdeu ${delesK}.` +
-    (ganho ? ` 🪙 +${ganho} moedas.` : "");
+    (ganho ? ` 🪙 +${ganho} moedas.` : "") +
+    (pvp.botNivelNovo && pvp.botNivelNovo !== pvp.botNivel ? (pvp.botNivelNovo > pvp.botNivel ? ` O bot subiu para o nível ${pvp.botNivelNovo}!` : ` O bot voltou para o nível ${pvp.botNivelNovo}.`) : "");
   $("fim").classList.toggle("venceu", venceu); $("fim").classList.add("on");
   if (venceu) tocar(SONS_JOGO.proximoNivel.som, SONS_JOGO.proximoNivel.volume, 0, 0);
   else if (!empate) somPersonagem(CASTELO, "caiu", 1, 0, 0);

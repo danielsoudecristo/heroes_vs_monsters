@@ -171,7 +171,7 @@ const elDica = $("cargaDica"), elFill = $("cargaFill"), elTxt = $("cargaTxt");
 elDica.textContent = CONFIG_INTRO.dicas[0];
 // o logo começa a descer quando a fonte estiver pronta (para não trocar de letra no meio da animação)
 Promise.race([
-  document.fonts ? Promise.all([document.fonts.load('900 60px "Cinzel Decorative"'), document.fonts.load('900 30px "Cinzel"')]) : Promise.resolve(),
+  document.fonts ? Promise.all([document.fonts.load('60px "Lilita One"'), document.fonts.load('600 18px "Fredoka"'), document.fonts.load('700 18px "Fredoka"')]) : Promise.resolve(),
   new Promise(r => setTimeout(r, 1200))
 ]).then(() => logo.classList.add("desce"));
 
@@ -354,6 +354,11 @@ function acaoMenu(acao) {
     if (contaAtual() && window.CONTA) procurarPartida();
     else { fecharIntro(); if (window.JOGO) window.JOGO.iniciarPvp(ladoMenu); }
   } else if (acao === "opcoes") abrirJanela("janelaOpcoes");
+  else if (acao === "tutorial") {                               // TUTORIAL: Opções > Como jogar
+    if (window.JOGO && window.JOGO.temPartida()) { fecharIntro(); window.JOGO.continuar(); }
+    else { acaoMenu("novo"); if (!intro.hidden) return; }      // sem partida: começa uma (no lado escolhido)
+    window.JOGO.tutorial();
+  }
   else if (acao === "ranking") abrirRanking();
   else if (acao === "personagens") abrirPersonagens();
   else if (acao === "lado") {
@@ -378,6 +383,7 @@ function fecharJanela() {
 for (const el of document.querySelectorAll(".janela-fundo")) {
   el.addEventListener("click", e => { if (e.target === el || e.target.hasAttribute("data-fechar")) { somClique(false); fecharJanela(); } });
 }
+$("opTutorial") && $("opTutorial").addEventListener("click", () => { fecharJanela(); acaoMenu("tutorial"); });
 $("opSom").addEventListener("click", () => {
   const ligado = window.JOGO ? window.JOGO.alternarSom() : true;
   $("opSom").textContent = ligado ? "Ligado" : "Desligado"; somClique(false);
