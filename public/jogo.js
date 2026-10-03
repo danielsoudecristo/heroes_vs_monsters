@@ -384,12 +384,75 @@ const PERSONAGENS = {
     }
   }
 };
+/* =====================================================================
+   OTIMIZAR_FOLHAS: deixa o jogo liso no celular.
+   As folhas de animação são enormes (uma chega a 9696 x 11956), mas cada personagem aparece pequeno na tela.
+   Quando cada folha carrega, o jogo guarda uma cópia já no tamanho em que ela aparece (x QUALIDADE)
+   e joga fora a original: muito menos memória de vídeo, e desenhar fica bem mais rápido.
+   As contas do jogo continuam iguais (o drawImage converte as posições sozinho).
+   ===================================================================== */
+const CELULAR = matchMedia("(pointer: coarse)").matches;
+const OTIMIZAR_FOLHAS = {
+  ligado: true,
+  qualidade: CELULAR ? 1.6 : 2.2,   // pixels da folha para cada pixel do jogo (maior = mais nítido e mais pesado)
+  minimo: 0.85,                     // só encolhe se for ficar pelo menos 15% menor
+  sombraMaxCelular: 8               // SOMBRAS_LEVES: no celular, sombra borrada no máximo assim (sombra grande pesa muito)
+};
+if (CELULAR) {                                                    // SOMBRAS_LEVES
+  const d0 = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "shadowBlur");
+  if (d0 && d0.set) Object.defineProperty(CanvasRenderingContext2D.prototype, "shadowBlur", {
+    get() { return d0.get.call(this); }, set(v) { d0.set.call(this, Math.min(v, OTIMIZAR_FOLHAS.sombraMaxCelular)); }, configurable: true
+  });
+}
+(function () {                                                    // drawImage entende as folhas encolhidas
+  const original = CanvasRenderingContext2D.prototype.drawImage;
+  if (original.__hvm) return;
+  const novo = function (img, a, b, c, d, e, f, g, h) {
+    if (this.__flash) {                                          // PISCAR_LEVE: brilho de "levou golpe" sem filtro (o filtro trava o celular)
+      this.__flash = false; novo.apply(this, arguments);
+      const ga = this.globalAlpha, op = this.globalCompositeOperation;
+      this.globalCompositeOperation = "lighter"; this.globalAlpha = ga * .75;
+      novo.apply(this, arguments);
+      this.globalCompositeOperation = op; this.globalAlpha = ga; this.__flash = true;
+      return;
+    }
+    const kx = img && img.__kx;
+    if (!kx) return original.apply(this, arguments);
+    const ky = img.__ky;
+    if (arguments.length === 9) return original.call(this, img, a * kx, b * ky, c * kx, d * ky, e, f, g, h);
+    if (arguments.length === 3) return original.call(this, img, a, b, img.naturalWidth, img.naturalHeight);
+    return original.apply(this, arguments);
+  };
+  novo.__hvm = true;
+  CanvasRenderingContext2D.prototype.drawImage = novo;
+})();
+// devolve uma cópia menor da folha (cada quadro com tamanho inteiro, para não vazar o quadro vizinho)
+function encolherFolha(fonte, escalaNaTela, cw, ch) {
+  if (!OTIMIZAR_FOLHAS.ligado || !fonte || !escalaNaTela) return fonte;
+  const w0 = fonte.naturalWidth || fonte.width, h0 = fonte.naturalHeight || fonte.height;
+  if (!w0 || !h0) return fonte;
+  const k = Math.min(1, OTIMIZAR_FOLHAS.qualidade * escalaNaTela);
+  if (k > OTIMIZAR_FOLHAS.minimo) return fonte;
+  const fw = cw || w0, fh = ch || h0;
+  const kx = Math.max(1, Math.round(fw * k)) / fw, ky = Math.max(1, Math.round(fh * k)) / fh;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w0 * kx)); c.height = Math.max(1, Math.round(h0 * ky));
+  const x = c.getContext("2d");
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
+  x.drawImage(fonte, 0, 0, w0, h0, 0, 0, c.width, c.height);
+  c.__kx = c.width / w0; c.__ky = c.height / h0;
+  c.complete = true; c.naturalWidth = w0; c.naturalHeight = h0;   // o resto do jogo continua vendo o tamanho original
+  return c;
+}
 for (const id in PERSONAGENS) {
   for (const nomeAnim in PERSONAGENS[id].anims) {
     const s = PERSONAGENS[id].anims[nomeAnim];
     s.img = new Image();
     s.ok = false;
-    s.img.onload = () => { s.ok = true; };
+    s.img.onload = () => {                                       // OTIMIZAR_FOLHAS: guarda no tamanho da tela
+      try { s.img = encolherFolha(s.img, PERSONAGENS[id].escala * (s.escala ?? 1), s.cw, s.ch); } catch (e) { console.warn(e); }
+      s.ok = true;
+    };
     s.img.onerror = () => { if (!s.opcional) registrar("sistema", `Não encontrei ${s.src}. Confira o nome da pasta e do arquivo.`, false); };
     s.img.src = s.src;
   }
@@ -800,7 +863,11 @@ for (const id in GUERREIROS) {
   for (const nome in sp.anims) {
     const a = sp.anims[nome];
     a.img = new Image(); a.ok = false;
-    a.img.onload = () => { ajustarLayout(a); a.ok = true; };
+    a.img.onload = () => {
+      ajustarLayout(a);
+      try { a.img = encolherFolha(a.img, sp.escala * (a.fator || 1) * (a.escala ?? 1), a.cw, a.ch); } catch (e) { console.warn(e); }   // OTIMIZAR_FOLHAS
+      a.ok = true;
+    };
     a.img.onerror = () => { if (!a.opcional) setTimeout(() => registrar("sistema", `Não encontrei ${a.src}. Confira a pasta.`, false), 0); };
     a.img.src = a.src;
   }
@@ -903,6 +970,7 @@ function medirParado(g) {
   const tronco = meioXAlfa(d, w, 0, b.minY + alt * .22, w, alt * .25) ?? (b.minX + b.maxX) / 2;
   return { altura: alt * E, troncoX: (tronco - ref.ax) * E, pesY: (b.maxY + 1 - ref.ay) * E };
 }
+function copiarParaVideo(cv0) { const c = document.createElement("canvas"); c.width = cv0.width; c.height = cv0.height; c.getContext("2d").drawImage(cv0, 0, 0); return c; }
 function prepararAndar(id, g, im, tentativa = 0) {
   const ref = g.sprite.anims.parado || g.sprite.anims.defendendo;
   if (ref && !ref.ok && tentativa < 40) { setTimeout(() => prepararAndar(id, g, im, tentativa + 1), 250); return; }   // espera a folha parada
@@ -950,7 +1018,9 @@ function prepararAndar(id, g, im, tentativa = 0) {
   // tronco no mesmo lugar do herói parado e pés na mesma linha: a troca andar -> parar -> atacar não pula
   const ax = med0 && troncos.length ? med(troncos) - med0.troncoX / Ew : med(pesX);
   const ay = med0 ? fundo + 1 - med0.pesY / Ew : fundo + 1;
-  g.andar = { ok: true, img: cvA, cols, cw, ch, quadros: n, ax, ay, fps: cfgH.fps, fator, escalaPasso: k * Ew };
+  // OTIMIZAR_FOLHAS: copia para uma folha normal (a de leitura fica fora da placa de vídeo) e no tamanho da tela
+  const folhaA = encolherFolha(cvA, g.sprite.escala * fator * 1.15, cw, ch);
+  g.andar = { ok: true, img: folhaA === cvA ? copiarParaVideo(cvA) : folhaA, cols, cw, ch, quadros: n, ax, ay, fps: cfgH.fps, fator, escalaPasso: k * Ew };
   recalcularPasso(id);                                              // passo casado com a velocidade
   setTimeout(() => registrar("sistema", `${g.nome}: animação de andar pronta (${n} quadros)`, true), 0);
 }
@@ -3288,12 +3358,12 @@ function desenharGuerreiroSprite(p) {
     ctx.fillStyle = "#6d8ccc"; ctx.beginPath(); ctx.arc(0, -40, 26, 0, 7); ctx.fill(); ctx.stroke();
     terminarGuerreiro(p, 90); return;
   }
-  if (p.flash > .25) ctx.filter = "brightness(2.2)";
+  ctx.__flash = p.flash > .25;   // PISCAR_LEVE
   ctx.save();
   ctx.scale(sp.escala, sp.escala);
   desenharComDesgaste(an.img, (q % an.cols) * an.cw, Math.floor(q / an.cols) * an.ch, an.cw, an.ch, -an.ax, -an.ay, p, an.ax, an.ay, false);
   ctx.restore();
-  ctx.filter = "none";
+  ctx.__flash = false;
   if (g.brilhoCajado && an === sp.anims.parado) brilhoCajado(g.brilhoCajado, p.idade + p.semente);
   terminarGuerreiro(p, 128);
 }
@@ -3301,13 +3371,13 @@ function desenharHeroiAndando(p, g) {
   const a = g.andar, q = Math.floor(p.tAndar * a.fps) % a.quadros;
   const cfg = MODO_MONSTERS.andar[p.tipo] || {};
   comecarGuerreiro(p, g.sentinela ? 44 : 30);
-  if (p.flash > .25) ctx.filter = "brightness(2.2)";
+  ctx.__flash = p.flash > .25;   // PISCAR_LEVE
   ctx.save();
   ctx.translate(cfg.deslocX || 0, 0);                               // ajuste fino opcional (painel de ajustes)
   const e = g.sprite.escala * a.fator * (cfg.tamanho || 1); ctx.scale(e, e);
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(a.img, (q % a.cols) * a.cw, Math.floor(q / a.cols) * a.ch, a.cw, a.ch, -a.ax, -a.ay, a.cw, a.ch);
-  ctx.restore(); ctx.filter = "none";
+  ctx.restore(); ctx.__flash = false;
   terminarGuerreiro(p, g.sentinela ? 185 : 128);
 }
 // Cristal do cajado pulsando, com faíscas e um anel de energia girando (coordenadas já na posição do guerreiro)
@@ -3341,7 +3411,7 @@ function desenharSentinela(p, g) {
   comecarGuerreiro(p, 44);
   if (!an.ok) { ctx.fillStyle = "#2b4a8f"; rr(-26, -120, 52, 110, 14); ctx.fill(); ctx.stroke(); terminarGuerreiro(p, 140); return; }
   const q = an === A.parado ? Math.floor(p.idade * an.fps) % an.quadros : Math.min(an.quadros - 1, Math.floor(p.tA * an.fps));
-  if (p.flash > .25) ctx.filter = "brightness(2.2)";
+  ctx.__flash = p.flash > .25;   // PISCAR_LEVE
   const escS = g.sprite.escala * (an.fator || 1);
   ctx.save(); ctx.scale(escS, escS);
   ctx.imageSmoothingQuality = "high";
@@ -3351,7 +3421,7 @@ function desenharSentinela(p, g) {
   const ci = Math.max(m, ct[0] * kc), cd = Math.max(m, ct[1] * kc), cb = Math.max(m, ct[2] * kc), ce = Math.max(m, ct[3] * kc);
   const sx = (q % an.cols) * an.cw, sy = Math.floor(q / an.cols) * an.ch;
   desenharComDesgaste(an.img, sx + ce, sy + ci, an.cw - ce - cd, an.ch - ci - cb, -an.ax + ce, -an.ay + ci, p, an.ax - ce, an.ay - ci, false);
-  ctx.restore(); ctx.filter = "none";
+  ctx.restore(); ctx.__flash = false;
   terminarGuerreiro(p, 185);
 }
 function desenharProtetor(p, g) {
@@ -3362,10 +3432,10 @@ function desenharProtetor(p, g) {
     terminarGuerreiro(p, 100); return;
   }
   const q = Math.max(0, Math.min(an.quadros - 1, Math.floor(p.qf ?? 0)));
-  if (p.flash > .25) ctx.filter = "brightness(2.2)";
+  ctx.__flash = p.flash > .25;   // PISCAR_LEVE
   ctx.scale(g.sprite.escala, g.sprite.escala);
   desenharComDesgaste(an.img, (q % an.cols) * an.cw, Math.floor(q / an.cols) * an.ch, an.cw, an.ch, -an.ax, -an.ay, p, an.ax, an.ay, false);
-  ctx.filter = "none";
+  ctx.__flash = false;
   terminarGuerreiro(p, 130);
 }
 function desenharGuerreiro(p) {
@@ -3596,7 +3666,7 @@ function desenharCriaturaSprite(c) {
   ctx.globalAlpha = alfa;
   if (m) ctx.rotate(easeInOut(Math.min(1, m * 1.8)) * 1.2);   // tomba para trás
   ctx.save();
-  if (c.flash > .25) ctx.filter = "brightness(2.3)";          // pisca ao levar dano
+  ctx.__flash = c.flash > .25;                               // pisca ao levar dano (PISCAR_LEVE)
   const esc = per.escala * (anim.escala ?? 1);                            // cada animação pode ter sua própria escala
   const paradoM = c.fixo && !c.morte && c.estado !== "atacar" && !c.acao && !c.atirando && !necroParado;   // MODO_MONSTERS: parado na casa
   const resp = necroParado && anim !== per.anims.parado ? 1 + Math.sin(tempo * 2.4 + c.fase) * .012
@@ -3604,6 +3674,7 @@ function desenharCriaturaSprite(c) {
   ctx.scale(anim.olhaDireita ? -esc : esc, esc * resp * amassa);      // a folha olha para a direita; o jogo anda para a esquerda
   ctx.imageSmoothingQuality = "high";                                      // reduz folhas grandes sem serrilhar
   desenharComDesgaste(anim.img, qx, qy, anim.cw, anim.ch, -anim.ax, -anim.ay, c, anim.ax, anim.ay, true);   // esqueleto: rachaduras
+  ctx.__flash = false;
   ctx.restore();
   if (necroParado && per.necro.brilhoCajado) brilhoCajado(per.necro.brilhoCajado, tempo + c.fase);
   // chamas grandes na cabeça desligadas: o fogo agora vem do corpo inteiro

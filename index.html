@@ -586,6 +586,7 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 .fim p{font-family:var(--fonte-texto); font-weight:600; font-size:18px; text-shadow:var(--letra-cartoon-fina)}
 .buffer{font-family:var(--fonte-titulo); font-weight:400; text-shadow:var(--letra-cartoon-fina); border-radius:16px}
 .placa .entrar, .placa.monsters .entrar{color:#fff}
+.bm.principal:hover, .bm.principal.foco, .tela-menu[data-lado] .bm.principal:hover, .tela-menu[data-lado] .bm.principal.foco{color:#fff}   /* texto branco também com o botão em destaque */
 /* TUTORIAL: as laterais escurecem igual ao jogo (nada marca o 16:9) e os botões de cima ficam apagados */
 #fundoBorrado::after{content:""; position:absolute; inset:0; background:rgba(6,5,12,.68); opacity:0; transition:opacity .35s; pointer-events:none}
 html.tutorial-ativo #fundoBorrado::after{opacity:1}
