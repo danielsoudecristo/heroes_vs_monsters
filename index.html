@@ -587,6 +587,31 @@ html.intro-aberta, html.intro-aberta body{overflow:hidden}
 .buffer{font-family:var(--fonte-titulo); font-weight:400; text-shadow:var(--letra-cartoon-fina); border-radius:16px}
 .placa .entrar, .placa.monsters .entrar{color:#fff}
 .bm.principal:hover, .bm.principal.foco, .tela-menu[data-lado] .bm.principal:hover, .tela-menu[data-lado] .bm.principal.foco{color:#fff}   /* texto branco também com o botão em destaque */
+/* ATUALIZACAO_APP: caixa na tela de carregamento (mesma imagem e mesma barra dourada) */
+.tela-carga.atualizando .carga-caixa, .tela-carga.atualizando .carga-continuar{display:none}
+.tela-carga.atualizando{cursor:default}
+.atualizar-caixa{position:absolute; left:50%; bottom:34px; width:640px; transform:translateX(-50%); z-index:3; text-align:center; padding:30px 34px 26px; border-radius:28px;
+  background:linear-gradient(180deg,rgba(52,64,122,.96),rgba(26,32,70,.96));
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.18), 0 0 0 4px #141a36, 0 0 0 9px #e2a93a, 0 0 0 12px #4a2a06, 0 14px 0 #0b0e20, 0 24px 46px rgba(0,0,0,.6);
+  animation:atualizarEntra .5s cubic-bezier(.2,.9,.3,1.3)}
+.atualizar-caixa[hidden]{display:none}
+@keyframes atualizarEntra{from{transform:translateX(-50%) translateY(40px) scale(.9); opacity:0}to{transform:translateX(-50%); opacity:1}}
+.atualizar-selo{position:absolute; left:50%; top:-20px; transform:translateX(-50%) rotate(-2deg); padding:5px 20px; border-radius:20px; white-space:nowrap;
+  font:400 18px var(--fonte-titulo); letter-spacing:.06em; color:#fff; background:linear-gradient(180deg,#9bea45,#3b8a17); text-shadow:var(--letra-cartoon-fina);
+  box-shadow:0 0 0 3px #123006, 0 4px 0 #123006}
+.atualizar-titulo{margin:6px 0 6px; font:400 40px var(--fonte-titulo); letter-spacing:.02em; color:#ffe98a; text-shadow:var(--letra-cartoon)}
+.atualizar-msg{margin:0 0 16px; font:600 18px/1.45 var(--fonte-texto); color:#f0eeff; text-shadow:var(--letra-cartoon-fina)}
+.atualizar-barra{margin:6px 18px 0}
+.atualizar-txt{min-height:24px; margin:12px 0 4px; font:400 21px var(--fonte-titulo); letter-spacing:.02em; color:#fff4d6; text-shadow:var(--letra-cartoon-fina)}
+.atualizar-txt:empty{display:none}
+.atualizar-bt{margin-top:8px; min-width:280px; height:62px; padding:0 34px; border:0; border-radius:20px; cursor:pointer;
+  font:400 30px var(--fonte-titulo); letter-spacing:.03em; color:#fff; text-shadow:var(--letra-cartoon);
+  background:linear-gradient(180deg,#ffe98a 0%,#ffc43a 46%,#f0a21c 54%,#c97a0c 100%);
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.55), inset 0 -4px 0 rgba(0,0,0,.2), 0 0 0 3px #4a2a06, 0 7px 0 #4a2a06, 0 12px 18px rgba(0,0,0,.5);
+  transition:transform .15s cubic-bezier(.3,1.6,.5,1)}
+.atualizar-bt:hover{transform:translateY(-3px) scale(1.04)} .atualizar-bt:active{transform:translateY(4px)}
+.atualizar-bt[hidden]{display:none}
+@media (prefers-reduced-motion:no-preference){ .atualizar-bt:not(:disabled){animation:respiraBotao 2.2s ease-in-out infinite} }
 /* TUTORIAL: as laterais escurecem igual ao jogo (nada marca o 16:9) e os botões de cima ficam apagados */
 #fundoBorrado::after{content:""; position:absolute; inset:0; background:rgba(6,5,12,.68); opacity:0; transition:opacity .35s; pointer-events:none}
 html.tutorial-ativo #fundoBorrado::after{opacity:1}
@@ -615,6 +640,15 @@ html.tutorial-ativo #jgMenu, html.tutorial-ativo #jgTela{opacity:.2; pointer-eve
         <div class="carga-txt" id="cargaTxt">Carregando 0%</div>
       </div>
       <div class="carga-continuar" id="cargaContinuar">Clique para começar</div>
+      <!-- ATUALIZACAO_APP: aparece no lugar da barra quando o app está velho -->
+      <div class="atualizar-caixa" id="atualizarCaixa" hidden>
+        <div class="atualizar-selo" id="atualizarSelo">NOVA VERSÃO</div>
+        <h2 class="atualizar-titulo" id="atualizarTitulo">Atualização disponível!</h2>
+        <p class="atualizar-msg" id="atualizarMsg"></p>
+        <div class="carga-barra atualizar-barra" id="atualizarBarra" hidden><div class="carga-fill" id="atualizarFill"></div></div>
+        <div class="atualizar-txt" id="atualizarTxt"></div>
+        <button class="atualizar-bt" id="atualizarBt" type="button">Atualizar</button>
+      </div>
     </section>
 
     <!-- 1b) Entrar (login com Google ou convidado) -->
@@ -816,6 +850,7 @@ html.tutorial-ativo #jgMenu, html.tutorial-ativo #jgTela{opacity:.2; pointer-eve
 <script src="/intro.js"></script>   <!-- telas de carregamento, escolha do lado e menu -->
 <script src="/jogo.js"></script>
 <script type="module" src="/src/conta.js"></script>   <!-- login com Google (Supabase) -->
+<script type="module" src="/src/atualizacao.js"></script>   <!-- ATUALIZACAO_APP: app velho precisa baixar a versão nova -->
 
 </body>
 </html>

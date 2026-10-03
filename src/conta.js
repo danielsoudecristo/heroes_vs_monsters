@@ -109,6 +109,11 @@ window.CONTA = {
       });
     });
   },
+  async configApp() {                              // ATUALIZACAO_APP: versão mínima e link do APK (supabase/7_atualizacao.sql)
+    const { data, error } = await sb.from("config_app").select("versao_minima,versao_nome,link_apk,novidades").eq("id", 1).maybeSingle();
+    if (error) throw error;
+    return data;
+  },
   async minhasPartidas() {
     const { data, error } = await sb.from("partidas").select("venceu,modo,trofeus,moedas,criado_em")
       .order("criado_em", { ascending: false }).limit(1000);

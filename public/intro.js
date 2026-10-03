@@ -195,7 +195,7 @@ function atualizarCarga(dt) {
   }
 }
 function sairDaCarga() {                        // o clique também libera o som no navegador
-  if (!cargaPronta || telaAtual !== "carga") return;
+  if (!cargaPronta || telaAtual !== "carga" || window.ATUALIZACAO_BLOQUEIA) return;   // ATUALIZACAO_APP: app velho não passa daqui
   somTrovao(); flash();
   logo.classList.remove("desce"); logo.classList.add("fixo");
   // LOGIN: quem já entrou com Google (ou escolheu convidado nesta visita) vai direto escolher o lado
@@ -320,6 +320,14 @@ function abrirMenu(lado) {
   atualizarPerfilMenu(); atualizarOpcaoConta(); atualizarBonusHoje(); ficarOnline(); carregarAmigos();
   focoMenu(0);
 }
+// ATUALIZACAO_APP: volta para a tela de carregamento (de qualquer lugar) para mostrar a atualização
+window.INTRO_VOLTAR_CARGA = () => {
+  if (window.JOGO) window.JOGO.pararParaMenu();
+  fecharJanela();
+  intro.hidden = false; document.documentElement.classList.add("intro-aberta");
+  logo.classList.remove("some", "desce", "menu"); logo.classList.add("fixo");
+  irPara("carga");
+};
 // o botão "Menu" da arena chama isto: para o jogo e volta para cá
 window.INTRO_ABRIR_MENU = () => {
   if (window.JOGO) window.JOGO.pararParaMenu();
