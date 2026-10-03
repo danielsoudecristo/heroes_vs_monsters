@@ -1844,7 +1844,7 @@ function atualizarSentinela(p, g, dt) {
     if (q >= an.quadros) { p.acao = null; p.escudoErguido = false; }
     return;
   }
-  if (naLinha.length >= S.minimoParaTerra && p.cdTerra <= 0 && A.terremoto.ok) {
+  if ((naLinha.length >= S.minimoParaTerra || (p.miraCastelo && !naLinha.length)) && p.cdTerra <= 0 && A.terremoto.ok) {   // CERCO: no castelo também
     p.acao = "terremoto"; p.tA = 0; p.impacto = false; p.cdTerra = S.recargaTerra;
   } else if (perto && A.atacando.ok) {
     p.acao = "atacando"; p.tA = 0; p.golpes = [];
@@ -1867,7 +1867,7 @@ function golpeSentinela(p, g) {
 function lancarOndaTerra(p, g) {
   const S = g.sentinela;
   somPersonagem(g, "terra", .9, 60, .03);
-  ondasTerra.push({ fim: ladoB(p.x) ? MW + 20 : PORTAO_X, r: p.r, y: p.y, x0: p.x + 30, frente: p.x + 30, v: S.velocidadeOnda, dano: Math.round(S.danoTerra * (p.mult || 1)), acertados: new Set(), picos: [], proxPico: p.x + 40, t: 0 });
+  ondasTerra.push({ castelo: !!p.miraCastelo, fim: p.miraCastelo ? PORTAO_INIMIGO + CERCO.recuoCastelo : ladoB(p.x) ? MW + 20 : PORTAO_X, r: p.r, y: p.y, x0: p.x + 30, frente: p.x + 30, v: S.velocidadeOnda, dano: Math.round(S.danoTerra * (p.mult || 1)), acertados: new Set(), picos: [], proxPico: p.x + 40, t: 0 });
   explosoes.push({ x: p.x + 30, y: p.y - 8, chaoY: p.y, t: 0, dur: .6, tipo: "impacto", raio: 70, estilo: "fogo", seed: rand(0, 6) });
   for (let i = 0; i < 26; i++) parts.push({ x: p.x + rand(-10, 60), y: p.y - rand(0, 8), vx: rand(-200, 260), vy: rand(-380, -120), g: 700,
     vida: 0, max: rand(.5, 1), tam: rand(3, 7), cor: ["#6b4a2e", "#8a6a45", "#3f2a1a"][i % 3], tipo: "ponto" });
@@ -1886,6 +1886,7 @@ function atualizarOndasTerra(dt) {
     }
     for (const pc of o.picos) pc.t += dt;
     o.picos = o.picos.filter(pc => pc.t < 1.1);
+    if (o.castelo && !o.bateu && o.frente >= o.fim) { o.bateu = true; acertarCasteloCerco("heroes", CERCO.danoPoder, o.y, true); }   // CERCO: a onda bate no castelo
     for (const c of criaturas) {                                  // quem a onda alcança é atingido e jogado para cima
       if (c.r !== o.r || c.morte || c.surgir < .3 || o.acertados.has(c) || c.x > o.frente || c.x < o.x0 - 20) continue;
       o.acertados.add(c);
@@ -2115,6 +2116,11 @@ function atualizarTita(c, per, dt) {
   }
   const naLinha = plantas.filter(p => p.r === c.r && alvoGuerreiro(p) && p.x < c.x + 20);
   const perto = naLinha.some(p => c.x - p.x < T.alcance);
+  if (c.miraCastelo && !naLinha.length) {                   // CERCO: parado no 2º quadrado, soca o chão e os ossos vão até o castelo
+    c.estado = "andar"; c.fixo = true;
+    if (c.cdOssos <= 0) { c.acao = "socar"; c.tA = 0; c.impactos = []; c.cdOssos = T.recargaOssos; c.fixo = false; }
+    return;
+  }
   if (naLinha.length >= T.minimoOssos && c.cdOssos <= 0 && c.x < G.right - 10) {
     c.acao = "socar"; c.tA = 0; c.impactos = []; c.cdOssos = T.recargaOssos;
   } else if (perto) {
@@ -2142,7 +2148,7 @@ function golpeTita(c, per) {
 function lancarOssos(c, per) {
   const T = per.tita;
   somPersonagem(per, "ossos", .9, 60, .04);
-  ondasOssos.push({ fim: ladoB(c.x) ? MW - PORTAO_X : G.left - 40, r: c.r, y: c.y, x0: c.x - 40, frente: c.x - 40, v: T.velocidadeOssos, dano: T.danoOssos, tipo: c.tipo, forca: c.forca,
+  ondasOssos.push({ castelo: !!c.miraCastelo, fim: c.miraCastelo ? G.left - CERCO.recuoCastelo : ladoB(c.x) ? MW - PORTAO_X : G.left - 40, r: c.r, y: c.y, x0: c.x - 40, frente: c.x - 40, v: T.velocidadeOssos, dano: T.danoOssos, tipo: c.tipo, forca: c.forca,
                     acertados: new Set(), ossos: [], prox: c.x - 52, t: 0 });
   for (let i = 0; i < 26; i++) parts.push({ x: c.x - 40 + rand(-30, 30), y: c.y - rand(0, 8), vx: rand(-240, 200), vy: rand(-380, -120), g: 700,
     vida: 0, max: rand(.5, 1), tam: rand(3, 6.5), cor: ["#5e4029", "#7d5a40", "#f3ead6"][i % 3], tipo: "ponto" });
@@ -2161,6 +2167,7 @@ function atualizarOndasOssos(dt) {
   for (const o of ondasOssos) {
     o.t += dt;
     if (o.frente > o.fim) o.frente -= o.v * dt;
+    if (o.castelo && !o.bateu && o.frente <= o.fim) { o.bateu = true; acertarCasteloCerco("monsters", CERCO.danoPoder, o.y, true); }   // CERCO: os ossos batem no castelo
     while (o.prox > Math.max(o.frente, o.fim + 10)) {
       o.ossos.push(novoOsso(o.prox + rand(-5, 5), 0));
       for (let i = 0; i < 6; i++) parts.push({ x: o.prox + rand(-14, 14), y: o.y - rand(0, 6), vx: rand(-90, 90), vy: rand(-280, -100), g: 650,
@@ -2456,15 +2463,16 @@ function atualizar(dt) {
       // CERCO (PvP): no 2º quadrado antes do castelo inimigo ele para (o de longe ataca o castelo; o de perto fica esperando)
       const xC = xCercoHerois();
       const adiante = ladoB(p.x) && criaturas.some(c => c.r === p.r && !c.morte && c.surgir > .3 && ladoB(c.x) && c.x - p.x > -5);   // alguém entre ele e o castelo
-      const noCerco = ladoB(p.x) && !p.cercoLivre && !adiante && p.x >= xC - .5;
-      p.miraCastelo = noCerco && CERCO.deLonge.includes(p.tipo);                      // o de longe mira no castelo (ataque normal dele)
+      const paraNoCerco = !p.chefe && (CERCO.deLonge.includes(p.tipo) || CERCO.poderNoCastelo.includes(p.tipo));   // os de perto (e o chefão) não param
+      const noCerco = paraNoCerco && ladoB(p.x) && !p.cercoLivre && !adiante && p.x >= xC - .5;
+      p.miraCastelo = noCerco;                                                         // ataca o castelo (tiro ou poder)
       if (noCerco && !frente && !ocupado && !p.miraCastelo && CERCO.pertoSegue) {
         p.cercoEspera = (p.cercoEspera || 0) + dt; if (p.cercoEspera >= CERCO.esperaPerto) p.cercoLivre = true;
       }
       if (!ocupado && !frente && p.vel > 0 && !noCerco) {
         if (!p.andando) p.trocaAndar = TROCA_ANDAR;                                   // começou a andar: troca suave
         p.andando = true; p.x += p.vel * dt;
-        if (ladoB(p.x) && !p.cercoLivre && !adiante && p.x > xC) p.x = xC;     // não passa do 2º quadrado
+        if (paraNoCerco && ladoB(p.x) && !p.cercoLivre && !adiante && p.x > xC) p.x = xC;     // não passa do 2º quadrado
         p.tAndar += dt * p.vel / ({ ...MODO_MONSTERS.andar.padrao, ...(MODO_MONSTERS.andar[p.tipo] || {}) }).velocidade;   // anda mais rápido = passo mais rápido
         if (!ladoB(p.x) && !p.atravessou) conferirFenda(p, true);                       // PORTAL_TROPA: abre na frente
         if (!ladoB(p.x) && p.x >= PORTAO_X) atravessarPortao(p, MW - PORTAO_X + 6);   // PORTOES
@@ -2566,13 +2574,13 @@ function atualizar(dt) {
         for (let i = 0; i < 14; i++) { const a = rand(0, 7), v = rand(80, 240);
           parts.push({ x: s.x, y: s.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, g: 160, vida: 0, max: rand(.3, .55), tam: rand(1.6, 3.2), cor: P.faiscas[i % 3], tipo: "ponto" }); }
       }
-      if (s.castelo && !s.fora && s.x <= G.left - 20) {          // CERCO: magia do Esqueleto Mago acertou o castelo dos Heroes
+      if (s.castelo && !s.fora && s.x <= G.left - CERCO.recuoCastelo) {   // CERCO: magia do Esqueleto Mago acertou o castelo dos Heroes
         s.fora = true;
         explosoes.push({ x: s.x, y: s.y, chaoY: s.yChao, t: 0, dur: .55, tipo: "impacto", raio: 55, estilo: s.estilo, seed: rand(0, 6) });
         somPersonagem(PERSONAGENS[s.tipoCriatura], "impacto", .6, 60, .06);
         acertarCasteloCerco("monsters", CERCO.dano, s.yChao);
       }
-      if (s.x < G.left - 30) s.fora = true;
+      if (s.x < G.left - (s.castelo ? CERCO.recuoCastelo + 20 : 30)) s.fora = true;
       continue;
     }
     if (s.tipo === "flechaInimiga") {       // flecha de monstro: acerta o primeiro guerreiro da linha
@@ -2584,10 +2592,10 @@ function atualizar(dt) {
           vida: 0, max: rand(.2, .4), tam: rand(2, 4), cor: i % 2 ? "#e8dfc8" : "#8a4b2a", tipo: "ponto"
         });
       }
-      if (s.castelo && !s.fora && s.x <= G.left - 20) {          // CERCO: flecha do Esqueleto Arqueiro acertou o castelo dos Heroes
+      if (s.castelo && !s.fora && s.x <= G.left - CERCO.recuoCastelo) {   // CERCO: flecha do Esqueleto Arqueiro acertou o castelo dos Heroes
         s.fora = true; acertarCasteloCerco("monsters", CERCO.dano, s.yChao);
       }
-      if (s.x < G.left - 30) s.fora = true;
+      if (s.x < G.left - (s.castelo ? CERCO.recuoCastelo + 20 : 30)) s.fora = true;
       continue;
     }
     if (s.tipo !== "flecha" && s.tipo !== "magia" && sorte() < .6) parts.push({
@@ -2614,7 +2622,7 @@ function atualizar(dt) {
         break;
       }
     }
-    if (s.castelo && !s.fora && s.x >= PORTAO_INIMIGO) {      // CERCO: flecha/magia do herói acertou o castelo dos Monsters
+    if (s.castelo && !s.fora && s.x >= PORTAO_INIMIGO + CERCO.recuoCastelo) {      // CERCO: flecha/magia do herói acertou o castelo dos Monsters
       s.fora = true;
       if (s.tipo === "magia") {
         explosoes.push({ x: s.x, y: s.y, chaoY: s.yChao, t: 0, dur: s.estilo === "fogo" ? .85 : .6, tipo: "impacto", raio: s.raio || 50, estilo: s.estilo, seed: rand(0, 6) });
@@ -2648,14 +2656,14 @@ function atualizar(dt) {
     c.surgir = Math.min(1, c.surgir + dt / .7);
     if (c.morte) { c.morte += dt; continue; }
     c.miraCastelo = false;
-    if (!c.dono && !ladoB(c.x) && c.atravessou !== false && !c.cercoLivre && c.surgir >= 1) {   // CERCO: 2º quadrado antes do castelo dos Heroes (invocados não param)
+    if (!c.dono && !c.chefe && (CERCO.deLonge.includes(c.tipo) || CERCO.poderNoCastelo.includes(c.tipo)) && !ladoB(c.x) && c.atravessou !== false && !c.cercoLivre && c.surgir >= 1) {   // CERCO: 2º quadrado antes do castelo dos Heroes (invocados não param)
       const xC = xCercoMonstros();
       if (c.x <= xC + .5) {
         const heroiNaFrente = plantas.some(p => p.r === c.r && !p.morte && !ladoB(p.x) && p.x < c.x + 10);
         if (heroiNaFrente) { c.avancou = true; c.fixo = false; }                  // alguém na frente (1º quadrado): luta normal
         else {
           if (!c.avancou) c.x = Math.max(c.x, xC);                                 // não passa do 2º quadrado
-          if (CERCO.deLonge.includes(c.tipo)) { c.miraCastelo = true; c.fixo = false; }   // de longe: ataca o castelo (lógica dele, abaixo)
+          if (CERCO.deLonge.includes(c.tipo) || CERCO.poderNoCastelo.includes(c.tipo)) { c.miraCastelo = true; c.fixo = false; }   // ataca o castelo (lógica dele, abaixo)
           else {
             if (CERCO.pertoSegue) { c.cercoEspera = (c.cercoEspera || 0) + dt; if (c.cercoEspera >= CERCO.esperaPerto) c.cercoLivre = true; }
             c.fixo = !c.cercoLivre;                                                  // de perto: parado respirando, esperando alguém
@@ -5988,16 +5996,20 @@ if (document.fonts && document.fonts.load) document.fonts.load("800 20px Grandst
    Por dentro, a partida é SEMPRE igual nos dois aparelhos (heróis à esquerda, monstros à direita);
    quem joga de Monsters só vê a tela espelhada.
    ===================================================================== */
-/* CERCO (em TODOS os modos: PvP online, contra o bot e campanha): na arena inimiga, todo atacante PARA no
-   2º quadrado antes do castelo, para o outro lado colocar alguém no 1º quadrado e lutar com ele.
-   - Quem ataca de LONGE fica ali e ataca o castelo com o PRÓPRIO poder (flecha, magia, fogo), como se fosse um inimigo.
-   - Quem luta de PERTO fica PARADO ali até alguém vir e derrotar ele (não vai até o castelo).
+/* CERCO (em TODOS os modos: PvP online, contra o bot e campanha):
+   - Quem ataca de LONGE para no 2º quadrado e ataca o castelo com o PRÓPRIO poder (flecha, magia, fogo).
+   - Sentinela e Titã param no 2º quadrado e usam o poder deles (onda de terra / ossos) no castelo.
+   - Quem luta de PERTO entra no castelo e dá dano (como antes).
    - Se tiver alguém entre ele e o castelo, ele vai até essa pessoa e luta; depois fica parado onde estiver.
    - Esqueleto Mago: para na coluna 7 (paraNaColuna); sem ninguém na frente, a magia dele vai até o castelo.
    - Esqueletos INVOCADOS pelo Mago: não param no cerco, vão até o castelo e ficam batendo nele (INVOCADOS).
      Se o Esqueleto Mago morrer, todos os que ele invocou morrem junto. */
 const CERCO = {
   deLonge: ["arqueiro", "mago", "magoFogo", "esqueletoArqueiro", "esqueletoMago"],
+  poderNoCastelo: ["sentinela", "esqueletoTita"],   // param no 2º quadrado e usam o PODER (onda de terra / ossos) no castelo
+  danoPoder: 8,       // dano do poder do Sentinela / Titã no castelo
+  recuoCastelo: 85,   // flechas e magias acertam o castelo (a parede), não a calçada: pixels depois do começo da grama
+  // os que lutam de PERTO (Nick, Protetor, Esqueleto, Esq. de Fogo, Esq. Protetor) NÃO param: entram no castelo e dão dano
   cada: 2.0,          // tempo mínimo (segundos) entre um ataque no castelo e outro
   dano: 3,            // dano de cada ataque no castelo
   pertoSegue: false,  // true = o de perto espera "esperaPerto" segundos e depois vai até o castelo (jeito antigo)
@@ -6007,17 +6019,24 @@ const CERCO = {
 const INVOCADOS = {
   dano: 1,            // dano de cada golpe no castelo
   cada: 1.5,          // segundos entre um golpe e outro (quando não tem a folha de ataque)
-  paraEm: -8          // onde param, em pixels a partir do começo da grama (negativo = na calçada do castelo)
+  paraEm: -50         // onde param, em pixels a partir do começo da grama (negativo = na calçada do castelo)
 };
 // CERCO: alguém acertou o castelo. lado = quem ATACOU ("heroes" acerta o castelo da direita, "monsters" o da esquerda)
-function acertarCasteloCerco(lado, dano, yChao) {
+function acertarCasteloCerco(lado, dano, yChao, forte) {
   const casteloDoJogador = lado === "heroes" ? simM() : !simM();   // fora do PvP, "vida" é sempre o castelo de quem joga
-  if (!casteloDoJogador) { ferirCasteloInimigo(dano, yChao); return; }
+  const xi = lado === "heroes" ? PORTAO_INIMIGO + CERCO.recuoCastelo : G.left - CERCO.recuoCastelo;
+  if (forte) {                                                      // IMPACTO: poder do Sentinela / Titã no castelo
+    if (!reduzMov) tremor = Math.max(tremor, .45);
+    explosoes.push({ x: xi, y: yChao - 30, chaoY: yChao, t: 0, dur: .8, tipo: "impacto", raio: 90, estilo: "fogo", seed: rand(0, 6) });
+    for (let i = 0; i < 24; i++) parts.push({ x: xi + rand(-20, 20), y: yChao - rand(10, 110), vx: rand(-220, 220), vy: rand(-380, -60), g: 700,
+      vida: 0, max: rand(.5, 1), tam: rand(3, 7), cor: ["#cfc8bb", "#8a8478", "#6b4a2e"][i % 3], tipo: "ponto" });
+  }
+  if (!casteloDoJogador) { ferirCasteloInimigo(dano, yChao, xi); return; }
   vida = Math.max(0, vida - dano); nucleoDor = 1;
   somPersonagem(CASTELO, "dano", .7, 120, .06);
-  textos.push({ x: xVisto(G.left + 10), y: yChao - 90, txt: "-" + dano, cor: "#ff6b5e", t: 0 });
+  textos.push({ x: xVisto(xi + 30), y: yChao - 90, txt: "-" + dano, cor: "#ff6b5e", t: 0 });
   for (let i = 0; i < 14; i++) parts.push({
-    x: G.left - 20 + rand(-10, 10), y: yChao - rand(20, 90), vx: rand(-120, 120), vy: rand(-160, 40), g: 0,
+    x: xi + rand(-10, 10), y: yChao - rand(20, 90), vx: rand(-120, 120), vy: rand(-160, 40), g: 0,
     vida: 0, max: rand(.4, .8), tam: rand(3, 6), cor: i % 2 ? "#ff6b5e" : "#cfc8bb", tipo: "ponto"
   });
   if (vida <= 0) terminar();                                     // fora do PvP: castelo caiu (no PvP quem decide é o atualizarPvp)
