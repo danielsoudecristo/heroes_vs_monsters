@@ -3,28 +3,73 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Voltando para o jogo...</title>
+<title>Heroes vs Monsters · Login</title>
 <style>
   body{margin:0; min-height:100vh; display:grid; place-items:center; background:#0f0b14; color:#fff4d6; font-family:system-ui,sans-serif; text-align:center}
-  .caixa{padding:28px 24px; max-width:340px}
+  .caixa{padding:28px 24px; max-width:360px}
   h1{font-size:22px; margin:0 0 10px} p{color:#cfc3dc; margin:0 0 20px; line-height:1.5}
   a{display:inline-block; padding:14px 26px; border-radius:12px; font-weight:800; font-size:18px; color:#2a1804; text-decoration:none;
     background:linear-gradient(180deg,#ffe58a,#d8921a); box-shadow:0 4px 0 #6b4a12}
+  .erro h1{color:#ff8a7a}
 </style>
 </head>
 <body>
-<div class="caixa">
-  <h1>Login feito! ✔</h1>
-  <p>Voltando para o Heroes vs Monsters...</p>
-  <a id="voltar" href="#">Voltar para o jogo</a>
+<div class="caixa" id="caixa">
+  <h1 id="titulo">Entrando...</h1>
+  <p id="txt">Só um instante.</p>
+  <a id="voltar" href="#" hidden>Voltar para o jogo</a>
 </div>
 <script>
-  // APP_LOGIN: o Google/Supabase volta para cá e esta página devolve o login para o app
-  // (com.danielsoucristo.heroesvsmonsters://login#access_token=...)
-  var resto = location.hash || location.search || "";
-  var url = "com.danielsoucristo.heroesvsmonsters://login" + resto;
-  document.getElementById("voltar").href = url;
-  setTimeout(function () { location.href = url; }, 300);   // tenta voltar sozinho; se o navegador segurar, é só tocar no botão
+  /* APP_LOGIN: o Google/Supabase volta para esta página.
+     1) JOGO GODOT: o jogo abre app-login.html?godot=CODIGO. A página guarda o código, faz o login com o Google
+        e, na volta, entrega a sessão para esse código (supabase/6_login_godot.sql). O jogo pega sozinho.
+     2) APP ANTIGO (Capacitor): devolve o login para o app pelo endereço com.danielsoucristo.heroesvsmonsters://login */
+  var SUPABASE = "https://wrhrtzesfhiwydtmbezq.supabase.co";
+  var CHAVE = "sb_publishable_LzAJ7FOOCOBJWr8DwuyvVg_xsfKCDTP";   // chave pública (a mesma do conta.js)
+  var PONTE = "https://heroes-vs-monsters.pages.dev/app-login.html"; // esta página (tem de estar nos Redirect URLs do Supabase)
+  var $ = function (id) { return document.getElementById(id); };
+  function mostrar(titulo, txt, erro) {
+    $("titulo").textContent = titulo; $("txt").textContent = txt;
+    if (erro) $("caixa").className = "caixa erro";
+  }
+  var q = new URLSearchParams(location.search);
+  var h = new URLSearchParams(location.hash.replace(/^#/, ""));
+  var godot = q.get("godot");
+  var guardado = null;
+  try { guardado = JSON.parse(localStorage.getItem("hvm_godot") || "null"); } catch (e) {}
+  if (guardado && Date.now() - guardado.t > 10 * 60 * 1000) guardado = null;   // código velho não vale
+
+  if (godot) {
+    // (1a) veio do jogo Godot: guarda o código e vai para o Google
+    try { localStorage.setItem("hvm_godot", JSON.stringify({ c: godot, t: Date.now() })); } catch (e) {}
+    mostrar("Abrindo o Google...", "Entre com a sua conta para salvar o seu progresso.");
+    location.replace(SUPABASE + "/auth/v1/authorize?provider=google&redirect_to=" + encodeURIComponent(PONTE));
+  } else if (guardado && (h.get("access_token") || h.get("error"))) {
+    // (1b) voltou do Google: entrega a sessão para o jogo
+    try { localStorage.removeItem("hvm_godot"); } catch (e) {}
+    if (h.get("error")) {
+      mostrar("Não deu para entrar", (h.get("error_description") || h.get("error")) + ". Volte para o jogo e tente de novo.", true);
+    } else {
+      fetch(SUPABASE + "/rest/v1/rpc/entregar_login_godot", {
+        method: "POST",
+        headers: { apikey: CHAVE, Authorization: "Bearer " + h.get("access_token"), "Content-Type": "application/json" },
+        body: JSON.stringify({ p_codigo: guardado.c, p_refresh: h.get("refresh_token") })
+      }).then(function (r) {
+        if (!r.ok) throw new Error("erro " + r.status);
+        history.replaceState(null, "", location.pathname);           // tira a sessão do endereço
+        mostrar("Login feito! ✔", "Pode voltar para o Heroes vs Monsters: o jogo já entrou na sua conta. (Pode fechar esta página.)");
+      }).catch(function (e) {
+        mostrar("Não deu para entrar", "Falha ao avisar o jogo (" + e.message + "). Volte para o jogo e tente de novo.", true);
+      });
+    }
+  } else {
+    // (2) APP ANTIGO: devolve para o app (como antes)
+    var resto = location.hash || location.search || "";
+    var url = "com.danielsoucristo.heroesvsmonsters://login" + resto;
+    mostrar("Login feito! ✔", "Voltando para o Heroes vs Monsters...");
+    $("voltar").href = url; $("voltar").hidden = false;
+    setTimeout(function () { location.href = url; }, 300);   // tenta voltar sozinho; se o navegador segurar, é só tocar no botão
+  }
 </script>
 </body>
 </html>
