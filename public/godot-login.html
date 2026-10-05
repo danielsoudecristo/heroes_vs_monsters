@@ -73,9 +73,16 @@
   } else if (erro) {
     guardar("erro:" + erro).catch(function () {});
     fim(false, "Login cancelado", erro.replace(/\+/g, " ") + ".");
+  } else if (!codigo && h.get("refresh_token")) {
+    // (se o servidor devolver a sessão pronta em vez do código, entrega a sessão para o jogo)
+    codigo = "rt:" + h.get("refresh_token");
+    enviar();
   } else if (!codigo) {
     fim(false, "Não deu para entrar", "O Google não devolveu o login.");
   } else {
+    enviar();
+  }
+  function enviar() {
     var tentar = function (n) {
       guardar(codigo).then(function () {
         fim(true, "Login feito!", "Pode voltar para o Heroes vs Monsters: o jogo termina de entrar na sua conta.");
