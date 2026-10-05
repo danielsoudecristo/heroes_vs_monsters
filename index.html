@@ -2,6 +2,15 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
+<script>
+  /* LOGIN DO JOGO GODOT (celular): se o Supabase mandar a volta do Google para cá em vez da godot-login.html,
+     passa para ela (que entrega o login para o jogo). Só age quando o login começou pelo jogo. */
+  (function () { try {
+    var q = new URLSearchParams(location.search), g = JSON.parse(localStorage.getItem("hvm_godot_login") || "null");
+    if (g && Date.now() - g.t < 15 * 60 * 1000 && (q.get("code") || q.get("error") || /refresh_token|error/.test(location.hash)))
+      location.replace("/godot-login.html" + location.search + location.hash);
+  } catch (e) {} })();
+</script>
 <base href="/assets/">   <!-- imagens, sons e vídeos ficam em public/assets -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Heroes vs Monsters Battlefront</title>
